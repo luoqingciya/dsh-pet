@@ -514,7 +514,12 @@ function createPetWindows() {
       offBodyMs.delete(win.id);
     });
     win
-      .loadFile('index.html', {
+      // **必须用绝对路径**：`loadFile('index.html')` 是相对 **appPath** 解析的。
+      // 开发态 appPath = 本脚本所在目录（runtime/electron-helper），相对路径恰好能用；
+      // 但打包后 Helper 与主进程共用同一个 exe，appPath 变成 `resources/app`，
+      // 相对路径就去找 `resources/app/index.html`（不存在）→ ERR_FILE_NOT_FOUND，
+      // 窗口创建了却永远不显示（表现为"只有设置页，没有宠物"）。
+      .loadFile(path.join(__dirname, 'index.html'), {
         query: {
           configUrl,
           bridge: BRIDGE ? '1' : '0',

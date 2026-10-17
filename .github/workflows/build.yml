@@ -65,6 +65,10 @@ jobs:
           DSH_PET_ELECTRON_MIRROR: https://github.com/electron/electron/releases/download/
         run: npm run ensure:electron
       - name: Package
+        env:
+          # Windows 上这一步会调 electron-builder --dir（为了把图标与版本信息写进 exe），
+          # 它要下 NSIS/7zip 工具包；runner 在 GitHub 网络内，直接走官方源。
+          ELECTRON_BUILDER_BINARIES_MIRROR: https://github.com/electron-userland/electron-builder-binaries/releases/download/
         run: node scripts/package-app.mjs
       # Windows 额外产一个安装版（NSIS，per-user 安装，数据同样落在安装目录）
       - name: Installer (Windows only)

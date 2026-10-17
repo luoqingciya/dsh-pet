@@ -91,16 +91,6 @@ if (app.isPackaged) {
 // 桌面 Helper 用同一份 Electron 二进制（打包版即应用自带的那份，开发态即缓存里的那份）
 process.env.DSH_PET_ELECTRON_PATH = process.execPath;
 
-/** 应用日志（宿主半边的 ctx.logger 也用这一份） */
-const log = {
-  info: (message: string): void => console.log(`[dsh-pet] ${message}`),
-  warn: (message: string): void => console.warn(`[dsh-pet] ${message}`),
-  error: (message: string): void => console.error(`[dsh-pet] ${message}`),
-  debug: (message: string): void => {
-    if (process.env.DSH_PET_APP_DEBUG === '1') console.log(`[dsh-pet] ${message}`);
-  },
-};
-
 /**
  * 落盘日志。
  *
@@ -118,6 +108,28 @@ function appendLog(line: string): void {
     /* 日志写不进去不能反过来影响启动 */
   }
 }
+
+/**
+ * 应用日志（宿主半边的 `ctx.logger` 也用这一份）。
+ *
+ * `warn` / `error` **同时落盘**：桌面 Helper 是子进程，它的 stderr 由宿主经 `logger.warn`
+ * 转发——不落盘的话，"宠物窗口没出现"这类问题在双击启动的场景下完全无从排查
+ * （控制台不存在，用户只能看到"只有设置窗"）。
+ */
+const log = {
+  info: (message: string): void => console.log(`[dsh-pet] ${message}`),
+  warn: (message: string): void => {
+    console.warn(`[dsh-pet] ${message}`);
+    appendLog(`[warn] ${message}`);
+  },
+  error: (message: string): void => {
+    console.error(`[dsh-pet] ${message}`);
+    appendLog(`[error] ${message}`);
+  },
+  debug: (message: string): void => {
+    if (process.env.DSH_PET_APP_DEBUG === '1') console.log(`[dsh-pet] ${message}`);
+  },
+};
 
 /** 进程级兜底：未捕获异常先落盘再退出（否则 Electron 只弹一个"Error"框，什么都查不到） */
 process.on('uncaughtException', (error: unknown) => {
@@ -308,6 +320,31 @@ function wrapChatRoute(): void {
   };
 }
 
+/**
+ * 首次运行标记文件。
+ *
+ * 为什么不用"配置文件是否存在"判断：**首次启动并不会写 main-config.jsonc**（只有用户在设置页
+ * 点保存才写），于是"配置不存在"永远成立，设置窗每次都会弹——实测第二次启动仍然弹。
+ * 改为在第一次启动收尾时落一个标记：它是"这个数据目录已经被初始化过"的直接证据。
+ */
+function firstRunMarker(): string {
+  return join(petDataDir(), '.initialized');
+}
+
+/** 是否首次运行（数据目录里还没有初始化标记） */
+function isFirstRun(): boolean {
+  return !existsSync(firstRunMarker());
+}
+
+/** 落首次运行标记（失败不影响启动） */
+function markInitialized(): void {
+  try {
+    writeFileSync(firstRunMarker(), new Date().toISOString() + '\n', 'utf8');
+  } catch {
+    /* 只影响下次是否弹设置窗，不值得为它中断启动 */
+  }
+}
+
 /** 起本地宿主（服务 → 上下文 → 插件 apply → 界面） */
 async function bootstrap(): Promise<void> {
   appendLog(`[start] root=${PACKAGE_ROOT} data=${app.getPath('userData')} electron=${process.versions.electron}`);
@@ -367,7 +404,10 @@ async function bootstrap(): Promise<void> {
   });
 
   createTray();
-  openSettings();
+  // 只有首次运行才自动弹设置窗（引导填 API Key）；之后启动就是"点开就有宠物"，
+  // 设置窗从托盘或右键菜单进——每次启动都糊一个设置窗在脸上不是桌宠该有的行为。
+  if (isFirstRun()) openSettings();
+  markInitialized();
   log.info(`本地服务 http://127.0.0.1:${port}/dsh-pet-7340/（设置页 /app/）`);
 }
 

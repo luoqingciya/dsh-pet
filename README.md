@@ -39,6 +39,9 @@
 
 宠物出现在屏幕右上角，托盘图标里可以打开设置、重载配置、退出。
 
+> **首次启动**会额外打开一次设置窗，引导你填模型与 API Key；之后启动就只出宠物
+> （设置窗随时可以从托盘或右键菜单打开）。
+
 ### 方式三：从源码运行
 
 ```sh
@@ -227,6 +230,7 @@ dsh-pet.exe（Electron 主进程）
    ├─ secrets.json        API Key（0600）
    ├─ memory.json         对话记忆
    ├─ app.log             运行日志（排障时先看它）
+   ├─ .initialized        首次运行标记（删掉它，下次启动会重新弹设置窗）
    ├─ main-animation/webm/  自定义动画（VP9-alpha .webm）
    └─ pet/                额外宠物种类
 ```
