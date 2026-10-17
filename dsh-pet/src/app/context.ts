@@ -120,11 +120,6 @@ export function createAppContext(options: AppContextOptions): AppContext {
 
     logger,
     webServer,
-    /** 本地没有 DSH 的浏览器访问闸门，URL 原样返回 */
-    connection: { authenticatedUrl: (baseUrl: string): string => baseUrl },
-    commands: { register: (): (() => void) => () => {} },
-    /** 本地不装账号服务：账号余额路由会走 credential-missing 的显式失败分支 */
-    get: (): undefined => undefined,
 
     agentDefaultModel: {
       currentSelection: (): { provider: string; model: string } => {

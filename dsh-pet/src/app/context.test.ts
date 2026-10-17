@@ -68,12 +68,6 @@ describe('createAppContext', () => {
     assert.equal(read(), 'commandcode');
   });
 
-  test('get() 恒 undefined（本地没有账号余额服务）', () => {
-    const app = createAppContext({ port: 0, logger, config, secrets: () => ({}) });
-    const get = app.ctx.get as (name: string) => unknown;
-    assert.equal(get('deepseekAccount'), undefined);
-  });
-
   test('emit 投递会话事件；单个监听器抛错不影响其它监听器', () => {
     const app = createAppContext({ port: 0, logger, config, secrets: () => ({}) });
     const received: string[] = [];

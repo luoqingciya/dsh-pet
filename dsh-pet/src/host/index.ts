@@ -1,36 +1,28 @@
 /**
- * dsh-pet 宿主半侧（host half）—— 宠物插件的"后端"部分
+ * dsh-pet 宿主半边 —— 应用的全部业务能力（HTTP 路由的唯一实现）。
  *
- * 职责：提供 `/dsh-pet-7340/` 前缀的**业务能力**（handlePetRoute 纯函数，路由与桌面管道共用）。
- * 全部配置（内置默认 + 用户主配置 + 文件宠物）由 ./config 的 readAllConfig 统一读取合并，
- * 本文件只消费它的返回值（绝对正确、零校验），不再接触任何配置文件。
+ * 职责：提供 `/dsh-pet-7340/` 前缀下的所有端点（`handlePetRoute`）。
+ * 全部配置（内置默认 + 用户主配置 + 文件宠物）由 `./config` 的 `readAllConfig` 统一读取合并，
+ * 本文件只消费它的返回值（绝对正确、零校验），不直接解析任何配置文件。
  *
- * 两个入口消费同一份 handlePetRoute：
- *   - HTTP 路由：注册在 DSH WebServer 上（浏览器 overlay / 设置页 / 斜杠命令用）
- *   - 桌面 Helper 管道：helper-process.ts 的 bridgeHandler（DSH_PET_BRIDGE=1 时经
- *     dsh-pet-bridge:// scheme + stdout JSON 行 + 本地回调，**不走 HTTP**——
- *     DSH Desktop 2.0.3+ 的浏览器访问闸门会拦插件子进程的裸 HTTP 请求）
- * 两端行为严格一致（硬契约：浏览器/桌面功能/文案/配置完全对齐）。
+ * 谁在用这份实现：
+ *   - 本地 HTTP 服务（`src/app/server.ts` 把请求转进来）—— 设置页、桌面窗口、第三方脚本都走它；
+ *   - 桌面 Helper 的 bridge 管道（`helper-process.ts` 的 bridgeHandler）—— 窗口内渲染端取配置/状态/素材。
+ * 两条路共用同一个函数，所以「桌面看到的」与「接口返回的」永远一致。
  *
  * 路由：
  *   /dsh-pet-7340/config             → 合并后的**成品配置**（{ main:{...}, test1:{...}, ... }，
- *                                每条目字段已填满；浏览器/桌面/设置页的唯一配置入口）
+ *                                每条目字段已填满；设置页与桌面窗口的唯一配置入口）
  *                                GET 读取成品；PUT 保存用户层（白名单重建 main-config.jsonc）、
  *                                POST 同步用户层（把内置默认 config.jsonc **原文**整份写入，
- *                                含注释与全部高级字段；合并结果与「没有用户层」等价）——
- *                                两个写接口的**响应体都是保存后的成品聚合**，设置页即时生效
- *                                直接拍平这份响应，客户端不再有第二份"补吹条目级字段"的实现
- *   /dsh-pet-7340/reload              → 桌面端「重载配置」（右键菜单，POST）：重启桌面 Helper，全部桌面
- *                                宠物窗口按最新配置重建（改配置文件后不必回设置页点保存）；与保存走
- *                                **同一条**重启路径（syncDesktop），宠物数量/display/size 变化同样生效
- *   /dsh-pet-7340/config/meta         → 配置文件与素材目录路径 + 全部存储位置清单
- *                                       （设置页「高级配置」「卸载与存储」展示用）
- *   /dsh-pet-7340/models              → 可选「服务商 + 模型」清单（设置页「AI 模型」下拉框数据源；
- *                                       与 DSH 模型选择器同源，取宿主 llm 服务的 listProviders/listModels）
- *   /dsh-pet-7340/thumb/<素材根>/<动画名>.webm|.mov  → 素材按宠物归属（.mov 为 macOS 定制，扩展名取决于
- *       客户端播放常量 ANIMATION_EXT；本路由固定双扩展名兜底）：
- *       文件宠物 = $DSH_HOME/dsh-pet/pet/<素材根>-animation/（只查自己的，绝不回落）；
- *       主宠物   = $DSH_HOME/dsh-pet/main-animation/<webm|mov>（用户目录，优先）→ 包内 assets/<webm|mov>
+ *                                含注释与全部高级字段）—— 两个写接口的**响应体都是保存后的成品聚合**
+ *   /dsh-pet-7340/reload              → 「重载配置」（POST）：重启桌面 Helper，全部宠物窗口按最新配置重建；
+ *                                与保存走**同一条**重启路径（syncDesktop），数量/display/size 变化同样生效
+ *   /dsh-pet-7340/config/meta         → 配置文件与素材目录路径 + 全部存储位置清单（设置页「存储」区）
+ *   /dsh-pet-7340/models              → 可选「服务商 + 模型」清单（设置页「本地服务」下拉框数据源）
+ *   /dsh-pet-7340/thumb/<素材根>/<动画名>.webm|.mov  → 素材按宠物归属：
+ *       文件宠物 = /dsh-pet/pet/<素材根>-animation/（只查自己的，绝不回落）；
+ *       主宠物   = /dsh-pet/main-animation/<webm|mov>（用户目录，优先）→ 包内 assets/<webm|mov>
  *       <素材根> 是**标识符**（pet/ 下文件名前缀），含分隔符/保留字符即 400（见 ID_FORBIDDEN）
  *   /dsh-pet-7340/state               → **轮询统一状态 S**（GET，前端 1s 轮询的唯一数据源）：
  *                                       { sections: { balance, workStatus, notify }, pets: { <id>: { say } } }，
@@ -38,29 +30,19 @@
  *                                       只读、纯内存、零副作用（绝不在这里触发外部调用/模型生成）。
  *   /dsh-pet-7340/balance              → 余额刷新（POST 动作端点，写 S；数据从 /state 读）
  *   /dsh-pet-7340/whisper              → 让某只宠物立即说一句（POST 动作端点，写 S 的 pets.<id>.say）
- *   /dsh-pet-7340/broadcast            → 第三方投喂：把外部给定的文本写进气泡（POST 动作端点，写 S 的
- *                                       pets.<id>.say；不生成、只搬运，供宿主侧其他插件集成）
- *   /dsh-pet-7340/anim                 → 点播动画：让桌宠播一段指定动画（POST 动作端点，写 S 的
- *                                       pets.<id>.anim；效果与右键「动作」菜单一致，供其他插件调用）
- *   /dsh-pet-7340/chat                 → 对话与记忆（GET 最近窗口 / POST 对话并写 memory.json；
- *                                       POST 只回 {ok}，回复同样写 S 的 pets.<id>.say）
- *   /dsh-pet-7340/font|pic             → 字体 / 通知图标素材
+ *   /dsh-pet-7340/broadcast            → 第三方投喂：把外部给定的文本写进气泡（不生成、只搬运）
+ *   /dsh-pet-7340/anim                 → 点播动画（效果与右键「动作」菜单一致）
+ *   /dsh-pet-7340/chat                 → 对话与记忆（GET 最近窗口 / POST 对话并写 memory.json）
+ *   /dsh-pet-7340/font|pic             → 字体 / 通知图标 / 表情包素材
  *
- * 系统通知不属于宠物行为、不在这里的旧实现是：浏览器半侧 notify.ts 经 connection 事件流
- * （api.events.mux/host）监听 DSH 事件。但 DSH 0.1.5 已删除该事件流 API——通知改为
- * host 侧监听宿主事件（session/event + agent/error）生成帧写进 S 的 sections.notify，
- * 浏览器统一轮询 /state 后弹 toast（帧契约与 shared/notify.ts 一致；单槽，见下方 pushNotifyFrame）。
+ * 系统通知：应用把「一次对话生成」合成 turn/start、turn/end 会话事件投进来（见 src/app/main.ts），
+ * 这里据此生成通知帧写进 S 的 sections.notify，应用主进程轮询到变化后弹原生通知
+ * （帧契约与 shared/notify.ts 一致；单槽，见下方 pushNotifyFrame）。
  *
- * 桌面模式（Electron 透明窗）没有独立配置文件：宠物显示在哪全部由宠物条目的 display 决定
- * （web=仅浏览器 / desktop=仅桌面 / both=两者 / none=都不显示；缺失时合并器填内置默认值）。
- *
- * 安全性：resolveAsset 做"防穿越"校验，保证路径仍在对应根目录内；
+ * 安全性：resolveAsset 做「防穿越」校验，保证路径仍在对应根目录内；
  *         PUT 保存经 saveUserConfig 白名单重建，id 过滤文件名非法字符。
- *
- * TODO(类型)：peer 依赖类型包本地暂不可解析，ctx/req/res 暂用 any；
- *             依赖可解析后替换为 DSH 官方类型。
  */
-import { createReadStream, existsSync, fstatSync, readFileSync } from 'node:fs';
+import { createReadStream, existsSync, fstatSync } from 'node:fs';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { homedir } from 'node:os';
@@ -91,14 +73,7 @@ import {
   userConfigUnparsable,
   type ConfigPaths,
 } from './config';
-import {
-  GOAL_UPDATE_TOOL,
-  reduceWorkStatus,
-  currentTaskFromTodo,
-  goalUpdateAction,
-  WorkStatusStore,
-  type WorkStatusTurnContext,
-} from './work-status';
+import { reduceWorkStatus, currentTaskFromTodo, WorkStatusStore } from './work-status';
 import {
   agentErrorFrame,
   hasBlockingActivity,
@@ -122,8 +97,11 @@ import {
 
 /** 插件行 id（与 cordis.patch.yml 一致） */
 export const name = 'pet';
-/** 需要注入的服务：webServer（路由）+ agentDefaultModel（当前服务商）+ credentials（凭证）+ llm（对话模型调用）+ commands（/balance 斜杠命令）+ connection（桌面 Helper「打开网站」用的已鉴权站点 URL） */
-export const inject = ['webServer', 'agentDefaultModel', 'credentials', 'llm', 'commands', 'connection'];
+/**
+ * 宿主半边对 ctx 的要求（应用在 `src/app/context.ts` 里一次性给齐）：
+ * webServer（路由）+ agentDefaultModel（服务商/模型）+ credentials（凭证）+ llm（生成）。
+ * 这里刻意**不声明** Cordis 的 `inject`：应用直接调 `apply(ctx)`，那份清单只对插件加载器有意义。
+ */
 
 /** 本包目录：宿主构建产物位于 lib/，其上一级即包根。 */
 const PACKAGE_ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -203,7 +181,7 @@ function sendFile(res: ServerResponse, file: string, contentType: string): void 
 }
 
 // 配置的读取/校验/合并/保存全部收敛在 ./config（readAllConfig / saveUserConfig，host 自包含实现，
-// 不 import src/shared —— DSH 单文件加载约束）。本文件不再保留任何配置逻辑，只消费成品返回值。
+// 不 import src/shared —— 宿主跑在 Node、渲染端跑在浏览器上下文，避免把 DOM 代码拖进来）。本文件不再保留任何配置逻辑，只消费成品返回值。
 
 /** 该宠物是否参与桌面模式（Electron 透明窗） */
 const isDesktopVisible = (display: unknown): boolean => display === 'desktop' || display === 'both';
@@ -246,8 +224,8 @@ function readBody(req: IncomingMessage): Promise<string> {
 // 这里不再有 host 侧拷贝——文件宠物与主宠物一样，统一从 readAllConfig 的成品读取。
 // ---------------------------------------------------------------------------
 
-/** 宿主插件主体：注册 `/dsh-pet-7340` 前缀路由 + 斜杠命令（/balance /pet /chat）。 */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- DSH 注入的 ctx（webServer/locale 等 service 无静态类型）
+/** 宿主主体：注册 `/dsh-pet-7340` 前缀路由（全部业务端点的唯一实现）。 */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- 应用注入的 ctx（webServer 等能力无静态类型）
 export function apply(ctx: any): void {
   // 用户数据根：配置与用户素材统一收敛于此（扩展包按 <插件id> 各自建目录）
   const dshHome = resolveDshHome();
@@ -291,7 +269,7 @@ export function apply(ctx: any): void {
   // 轮询统一状态（S）：前端 1s 轮询的**唯一**数据源（余额 / 工作状态 / 通知 / 宠物说话）。
   // 所有写入走 state.writeSection / writePet（由它统一更新 counter），见 ./state 的说明。
   const state = new PollStateStore();
-  // 工作状态联动快照（/work-status 端点响应，浏览器 1s 轮询）：state=当前活动状态（null=空闲）、
+  // 工作状态联动快照（/state 里的 sections.workStatus，桌面窗口 1s 轮询）：state=当前活动状态（null=空闲）、
   // task=当前任务详情、ts=最近变化时间（轮询侧检测变化用）。气泡文案不在此：浏览器读配置
   // events.workStatusTexts（host 不内置文案）。
   // 聚合与展示选择都在 WorkStatusStore（host/work-status.ts，纯逻辑可单测）：**state 与 task 都按
@@ -312,16 +290,14 @@ export function apply(ctx: any): void {
     publishedWork = key;
     state.writeSection('workStatus', { state: snap.state, task: snap.task });
   };
-  // 系统通知帧：host 监听 DSH 宿主事件生成通知帧（帧契约与 shared/notify.ts 一致），写进 S 的
-  // sections.notify，浏览器 1s 轮询 /state 后弹 toast。
-  // 背景：DSH 0.1.5 删除浏览器侧 api.events.mux/host 事件流，改为 host 转发通道——
-  // 不依赖 DSH 版本间变化的事件 API。
+  // 系统通知帧：宿主监听应用投进来的会话事件（turn/end、agent/error）生成通知帧
+  // （帧契约与 shared/notify.ts 一致），写进 S 的 sections.notify；应用主进程轮询到变化后
+  // 弹原生通知（见 src/app/notifications.ts）。
   // **单槽**（后到覆盖先到）：同一秒来多条只弹最后一条。这是有意的取舍——1 秒内连弹多个系统通知
   // 本身没有意义（反而更烦），所以不再带 seq / 增量帧队列（改造前的 frames 数组机制已删）。
   const pushNotifyFrame = (frame: HostNotifyFrame): void => {
     state.writeSection('notify', frame);
   }; /** 每会话 turn 级标志（goal 续跑轮判定；不参与展示，仅修正 turn/end 终局语义） */
-  const turnFlags = new Map<string, WorkStatusTurnContext>();
   /** 终态（success/error）展示窗口定时器：约 60s 后清掉该会话条目，陈旧完成态不再浮上来（Bug 2/3） */
   const terminalTimers = new Map<string, ReturnType<typeof setTimeout>>();
   const TERMINAL_KEEP_MS = 60 * 1000;
@@ -340,7 +316,6 @@ export function apply(ctx: any): void {
       const sessionState = workStatus.stateOf(sessionId);
       if (sessionState === 'success' || sessionState === 'error') {
         workStatus.clear(sessionId); // 条目连同它的任务详情文案一起消失，不残留到后续活动
-        turnFlags.delete(sessionId);
         publishWorkStatus(); // 清完要写 S：否则前端一直挂着那条陈旧完成态
       }
     }, TERMINAL_KEEP_MS);
@@ -391,8 +366,6 @@ export function apply(ctx: any): void {
       }, NOTIFY_ACTIVITY_DELAY_MS),
     );
   };
-  // 命令「当前桌宠」（/pet 选择、/chat 使用）：全局单值不分会话；进程内内存，重启回默认第一只
-  let activePetId = '';
   // 碎碎念周期调度的「上次生成时刻」（按宠物）：调度拍据此判断到没到点。
   // 改造前这份节流靠 whisperCache（缓存 + ts 比较），现在"该不该生成"由调度侧决定、
   // "生成结果"直接写 S——多端共享同一句由 S 天然保证，不再需要第二份缓存。
@@ -579,25 +552,6 @@ export function apply(ctx: any): void {
    *   标记随数据一起写进叶子：只有 host 知道是谁要的，前端据此决定余额不可用时要不要**必弹**
    *   文字说明（decideBalanceNotice 的 explicit；周期刷新则只在原因变化时弹一次，免得反复刷屏）。
    */
-  /**
-   * 账号服务要求的调用方身份（`AccountClientMetadata`）：Platform 用它派生五个客户端头，
-   * 只影响**请求来源标识**与**服务端本地化文案**，不参与余额数值与币种。
-   *
-   * - version：本插件版本（读自身 package.json；读不到回落 '0.0.0'——该字段只是标识）
-   * - locale：本插件是中文产品，固定 `zh-CN`（Platform 侧归一到 zh_CN）
-   * - timezoneOffsetSeconds：本机 UTC 偏移（东八区为 +28800）
-   */
-  const accountClientMetadata = (): { version: string; locale: string; timezoneOffsetSeconds: number } => {
-    let version = '0.0.0';
-    try {
-      const raw = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8')) as { version?: unknown };
-      if (typeof raw.version === 'string' && raw.version.length > 0) version = raw.version;
-    } catch {
-      // 读不到不影响查询：version 只是平台侧的来源标识
-    }
-    return { version, locale: 'zh-CN', timezoneOffsetSeconds: -new Date().getTimezoneOffset() * 60 };
-  };
-
   const refreshBalance = async (manual = false): Promise<void> => {
     const mark = <T>(v: T): T | (T & { manual: true }) => (manual ? { ...v, manual: true } : v);
     try {
@@ -607,21 +561,10 @@ export function apply(ctx: any): void {
       const petBalanceProvider = (ctx as { petBalanceProvider?: () => unknown }).petBalanceProvider;
       const balanceProviderId =
         typeof petBalanceProvider === 'function' ? String(petBalanceProvider() || sel.provider) : sel.provider;
-      const result = await queryBalance(
-        balanceProviderId,
-        async (ref) => {
-          const rc = await ctx.credentials.resolve(credentialRef(ref));
-          return rc?.value;
-        },
-        // `deepseek-account`（免费额度 / 平台登录）没有 API Key：它的凭证是 DSH 账号服务
-        // 持有的授权记录，只能经 getBalance 查询。账号服务是**可选**服务（软取，不放进
-        // inject）——没装账号插件时它不在场，此时该路由报 credential-missing 而不是崩。
-        async () => {
-          const account = ctx.get('deepseekAccount', false);
-          if (!account) return undefined;
-          return account.getBalance(accountClientMetadata());
-        },
-      );
+      const result = await queryBalance(balanceProviderId, async (ref) => {
+        const rc = await ctx.credentials.resolve(credentialRef(ref));
+        return rc?.value;
+      });
       state.writeSection('balance', mark(result));
     } catch (e) {
       state.writeSection(
@@ -636,22 +579,19 @@ export function apply(ctx: any): void {
     }
   };
 
-  /** 当前交互桌宠 id：/pet 已选且仍存在 → 该宠物；未选/已失效 → 有效宠物列表第一只（进程内，重启回默认） */
+  /**
+   * 「默认宠物」= 有效宠物列表的第一只。
+   *
+   * 从前这里还有"用户在 /pet 里选过哪只"的进程内状态；斜杠命令删掉后没有"当前桌宠"这个概念了，
+   * 动作端点一律用查询参数 `pet=<id>` 指定目标，缺省就落到第一只。
+   */
   const resolveActivePetId = (): string => {
     try {
       const eff = effectivePetList();
-      if (eff.length === 0) return '';
-      if (activePetId && eff.some((p) => String(p.id) === activePetId)) return activePetId;
-      return String(eff[0].id);
+      return eff.length === 0 ? '' : String(eff[0].id);
     } catch {
-      return activePetId;
+      return '';
     }
-  };
-
-  /** 宠物的显示名（name，缺失回落 id）——命令文案用 */
-  const petDisplayName = (pet: Record<string, unknown>): string => {
-    const n = String(pet.name ?? '').trim();
-    return n || String(pet.id ?? '');
   };
 
   let hasDesktopPet = false;
@@ -1373,46 +1313,20 @@ export function apply(ctx: any): void {
         }
         return;
       }
-      if (type === 'user/message') {
-        // 目标续跑轮判定：自动轮的消息带 source.kind==='goal'（round>0），该轮属自动续跑，
-        // 其 turn/end completed 只是"本轮完成"，不是整个任务完成
-        const source = (event as { data?: { source?: { kind?: string } } })?.data?.source;
-        if (source?.kind === 'goal') {
-          const flags = turnFlags.get(sessionId) ?? { goalRound: false, closing: null };
-          flags.goalRound = true;
-          turnFlags.set(sessionId, flags);
-        }
-        return; // user/message 不驱动档位动画
-      }
       if (type === 'turn/start') {
-        turnFlags.set(sessionId, { goalRound: false, closing: null }); // 新一轮：清 turn 级标志
         // 新一轮也开始新的任务上下文：清掉上一轮留下的任务详情文案（issue #59），否则它会一直挂着。
         // 代价：goal 续跑这类多轮任务，每轮开头会回落一瞬档位文案，直到本轮（通常在开头几步内）
         // 再写一次 todo 清单。
         workStatus.setTask(sessionId, null);
         publishWorkStatus(); // 清掉上一轮任务文案也要写 S
       }
-      if (
-        type === 'tool/call' &&
-        String((event as { data?: { name?: unknown } })?.data?.name ?? '') === GOAL_UPDATE_TOOL
-      ) {
-        // update_goal complete/blocked = 本轮是该目标的收尾轮，其 completed 才是真完成
-        const action = goalUpdateAction(String((event as { data?: { arguments?: unknown } })?.data?.arguments ?? ''));
-        if (action) {
-          const flags = turnFlags.get(sessionId) ?? { goalRound: false, closing: null };
-          flags.closing = action;
-          turnFlags.set(sessionId, flags);
-        }
-      }
       const next = reduceWorkStatus(
         event as { type?: string; data?: Record<string, unknown> & { reason?: { kind?: string } } },
-        turnFlags.get(sessionId),
       );
       if (!next) {
         // turn/end 的 null（aborted / 未知 kind）＝该会话回合已结束：清掉会话状态，让展示回到空闲或
         // 落到其他活跃会话，防止回合被打断后永久卡在上一档；其他事件的 null 是"不关心"，忽略。
         if (type === 'turn/end') {
-          turnFlags.delete(sessionId);
           cancelTerminalCleanup(sessionId); // 条目都要清了，别留一个到点后无事可做的定时器
           workStatus.clear(sessionId); // 条目连同任务详情文案一起消失（clear 内部会重算展示）
           publishWorkStatus(); // 回合被打断 → 回到空闲：前端据此收起常驻气泡
@@ -1482,22 +1396,6 @@ export function apply(ctx: any): void {
       errorDispose();
     };
   }, 'dsh-pet: notify frames');
-
-  // /balance 斜杠命令：触发一次余额刷新（写 S → 前端 1s 轮询看到后弹气泡）。
-  // fire-and-forget：回执不等外部 API（查询可能要几秒），立刻回；结果一律从 S 看
-  // （成功播档位动画 + 余额气泡；服务商不支持 / 缺凭证 / 抓取失败则弹文字说明气泡，绝不静默）。
-  ctx.effect(
-    () =>
-      ctx.commands.register({
-        name: 'balance',
-        description: '手动触发桌宠余额显示（立即弹出余额气泡）',
-        handler: () => {
-          void refreshBalance(true); // manual：命令是用户主动敲的
-          return { kind: 'success', text: '已触发桌宠余额显示' };
-        },
-      }),
-    'dsh-pet: /balance command',
-  );
 
   // 余额周期刷新：host 侧唯一定时器（前端不再有任何余额定时器）。
   // 周期**每次重新读配置** eventsRefreshSec.balance → 改了配置下一拍自然跟上。
@@ -1570,92 +1468,6 @@ export function apply(ctx: any): void {
       if (timer !== null) clearTimeout(timer);
     };
   }, 'dsh-pet: whisper poll');
-
-  // /pet 斜杠命令：选择「当前桌宠」（/chat 对话的目标）。浏览器端另有 commandUi 装饰的选择框
-  // （裸输 /pet 回车或菜单点选时弹出，选中后提交 /pet <id> 走同一 handler）；手输参数认 id 或名字
-  // （name 可重复：唯一命中才认，重名报错列出候选 id）。
-  ctx.effect(
-    () =>
-      ctx.commands.register({
-        name: 'pet',
-        description: '选择桌宠（/chat 对话的目标；支持选择框或手输 id/名字）',
-        input: { hint: '[宠物 id 或名字]（留空查看当前）' },
-        handler: ({ rawInput }: { rawInput: string }) => {
-          const arg = rawInput.trim();
-          let eff: Record<string, unknown>[];
-          try {
-            eff = effectivePetList();
-          } catch {
-            eff = [];
-          }
-          if (!arg) {
-            const cur = resolveActivePetId();
-            const found = eff.find((p) => String(p.id) === cur);
-            return {
-              kind: 'success',
-              text: '当前桌宠：' + (found ? petDisplayName(found) : cur || '（无可交互桌宠）'),
-            };
-          }
-          const byId = eff.find((p) => String(p.id) === arg);
-          if (byId) {
-            activePetId = String(byId.id);
-            return { kind: 'success', text: '已选择桌宠：' + petDisplayName(byId) };
-          }
-          const byName = eff.filter((p) => petDisplayName(p) === arg);
-          if (byName.length === 1) {
-            activePetId = String(byName[0].id);
-            return { kind: 'success', text: '已选择桌宠：' + petDisplayName(byName[0]) };
-          }
-          if (byName.length > 1) {
-            return {
-              kind: 'error',
-              text:
-                '「' +
-                arg +
-                '」有 ' +
-                byName.length +
-                ' 只桌宠（id：' +
-                byName.map((p) => String(p.id)).join('、') +
-                '），请用 id 指定',
-            };
-          }
-          return { kind: 'error', text: '找不到桌宠「' + arg + '」（id 或名字都行；/pet 回车可打开选择框）' };
-        },
-      }),
-    'dsh-pet: /pet command',
-  );
-
-  // /chat 斜杠命令：与当前桌宠对话。无参数 = 碎碎念一句（手动语义：不受 whisperEnabled 门控，
-  // 那个字段只关自动周期）；有参数 = 正常对话（走 chatWithPet 同一条路径：记忆 + 人设 + 写盘）。
-  // 两个分支都是 **fire-and-forget**：回执不等模型（生成要几秒），文本一律写进 S 的
-  // pets.<id>.say，前端 1s 轮询 /state 后弹气泡——与 /balance 命令同一套语义（回执不带数据）。
-  ctx.effect(
-    () =>
-      ctx.commands.register({
-        name: 'chat',
-        description: '与桌宠对话：留空 = 碎碎念一句；输入消息 = 正常对话',
-        input: { hint: '[消息]（留空 = 碎碎念）' },
-        handler: ({ rawInput }: { rawInput: string }) => {
-          const petId = resolveActivePetId();
-          if (!petId) return { kind: 'error', text: '没有可交互的桌宠' };
-          const text = rawInput.trim();
-          if (!text) {
-            void publishWhisper(petId).catch((e: unknown) =>
-              console.warn('[dsh-pet] 碎碎念异常：' + (e instanceof Error ? e.message : String(e))),
-            );
-            return { kind: 'success', text: '已让桌宠碎碎念一句' };
-          }
-          if (text.length > 2000) return { kind: 'error', text: '消息过长（限 2000 字）' };
-          void chatWithPet(petId, text).then((r) => {
-            if (!r.ok) {
-              console.warn('[dsh-pet] 对话失败 reason=' + r.reason + (r.message ? ' ' + r.message : ''));
-            }
-          });
-          return { kind: 'success', text: '已发送，桌宠马上回应' };
-        },
-      }),
-    'dsh-pet: /chat command',
-  );
 
   // 系统通知的宿主监听已在上方注册（notify frames effect）：host 监听 session/event +
   // agent/error 生成通知帧入队，浏览器轮询 /notify 拉取弹 toast（DSH 0.1.5 删除了浏览器侧

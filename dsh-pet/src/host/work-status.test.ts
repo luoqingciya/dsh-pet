@@ -1,7 +1,6 @@
 /**
  * host 工作状态纯逻辑单元测试 —— 钉住两件事：
- *   ① 「goal 自动续跑轮的中间轮 turn/end completed 不判成功」：
- *      中间轮 → result（不庆祝）；收尾轮 complete → success / blocked → error；非 goal 轮原行为不变。
+ *   ① 事件 → 档位的压缩（turn/start、turn/end 的 completed/error/max-tokens/blocked/aborted）；
  *   ② 任务详情文案与按会话聚合（issue #59）：多个 in_progress 取**最后**一个、清单全完成 → null、
  *      超长按码点截断；WorkStatusStore 的 task 挂在会话条目上，展示时与 state 同源同会话，
  *      条目一清文案就消失（"任务结束后永久残留"的根治点）。
@@ -12,80 +11,42 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  completedState,
   currentTaskFromTodo,
-  goalUpdateAction,
   reduceWorkStatus,
   TASK_TEXT_MAX,
   WorkStatusStore,
   type HostWorkStatusState,
 } from './work-status.ts';
 
-describe('goalUpdateAction —— update_goal arguments 解析', () => {
-  test('complete / blocked 识别', () => {
-    assert.equal(goalUpdateAction('{"action":"complete","goal_id":"g1"}'), 'complete');
-    assert.equal(goalUpdateAction('{"action":"blocked","blocked_reason":"x"}'), 'blocked');
+describe('reduceWorkStatus —— 事件 → 档位', () => {
+  const end = (kind: string) => ({ type: 'turn/end', data: { reason: { kind } } });
+
+  test('turn/start → thinking', () => {
+    assert.equal(reduceWorkStatus({ type: 'turn/start', data: {} }), 'thinking');
   });
 
-  test('其它动作 / 缺省 / 非法 JSON → null（按未收尾处理）', () => {
-    assert.equal(goalUpdateAction('{"action":"edit"}'), null);
-    assert.equal(goalUpdateAction('{"action":"pause"}'), null);
-    assert.equal(goalUpdateAction(''), null);
-    assert.equal(goalUpdateAction('not json'), null);
-    assert.equal(goalUpdateAction('null'), null);
-  });
-});
-
-describe('completedState —— turn/end completed 终局判定', () => {
-  test('非 goal 轮 / 无上下文 → success（原行为，向后兼容）', () => {
-    assert.equal(completedState(undefined), 'success');
-    assert.equal(completedState({}), 'success');
-    assert.equal(completedState({ goalRound: false, closing: null }), 'success');
+  test('turn/end：completed → success、错误系 → error、blocked → waiting', () => {
+    assert.equal(reduceWorkStatus(end('completed')), 'success');
+    assert.equal(reduceWorkStatus(end('error')), 'error');
+    assert.equal(reduceWorkStatus(end('max-tokens')), 'error');
+    assert.equal(reduceWorkStatus(end('timeout')), 'error');
+    assert.equal(reduceWorkStatus(end('blocked')), 'waiting');
   });
 
-  test('自动续跑轮中间轮（goalRound && 未收尾）→ result（本轮完成≠任务完成，不庆祝）', () => {
-    assert.equal(completedState({ goalRound: true }), 'result');
-    assert.equal(completedState({ goalRound: true, closing: null }), 'result');
+  test('aborted / 未知 reason → null（调用方据此把会话清回空闲）', () => {
+    assert.equal(reduceWorkStatus(end('aborted')), null);
+    assert.equal(reduceWorkStatus({ type: 'turn/end', data: {} }), null);
   });
 
-  test('收尾轮 complete → success；blocked → error', () => {
-    assert.equal(completedState({ goalRound: true, closing: 'complete' }), 'success');
-    assert.equal(completedState({ goalRound: true, closing: 'blocked' }), 'error');
-  });
-});
-
-describe('reduceWorkStatus —— 带 turn 上下文的事件压缩', () => {
-  const endCompleted = {
-    type: 'turn/end',
-    data: { turn: 5, reason: { kind: 'completed' } },
-  };
-
-  test('中间轮 completed → result', () => {
-    assert.equal(reduceWorkStatus(endCompleted, { goalRound: true, closing: null }), 'result');
-  });
-
-  test('收尾轮 completed → success / blocked → error', () => {
-    assert.equal(reduceWorkStatus(endCompleted, { goalRound: true, closing: 'complete' }), 'success');
-    assert.equal(reduceWorkStatus(endCompleted, { goalRound: true, closing: 'blocked' }), 'error');
-  });
-
-  test('普通轮（不传上下文）→ success（向后兼容）', () => {
-    assert.equal(reduceWorkStatus(endCompleted), 'success');
-    assert.equal(reduceWorkStatus(endCompleted, {}), 'success');
-  });
-
-  test('其它 turn/end reason 不受影响：error / blocked / aborted', () => {
-    assert.equal(reduceWorkStatus({ type: 'turn/end', data: { reason: { kind: 'error' } } }), 'error');
-    assert.equal(reduceWorkStatus({ type: 'turn/end', data: { reason: { kind: 'max-tokens' } } }), 'error');
-    assert.equal(reduceWorkStatus({ type: 'turn/end', data: { reason: { kind: 'blocked' } } }), 'waiting');
-    // aborted → null：调用方清理会话回空闲（既有语义不回退）
-    assert.equal(reduceWorkStatus({ type: 'turn/end', data: { reason: { kind: 'aborted' } } }), null);
-  });
-
-  test('非 turn/end 事件不受 turn 上下文影响', () => {
-    assert.equal(reduceWorkStatus({ type: 'turn/start', data: { turn: 6 } }, { goalRound: true }), 'thinking');
-    assert.equal(reduceWorkStatus({ type: 'tool/call', data: { name: 'read' } }, { goalRound: true }), 'working');
+  test('工具与审批类事件', () => {
+    assert.equal(reduceWorkStatus({ type: 'tool/call', data: { name: 'read' } }), 'working');
+    assert.equal(reduceWorkStatus({ type: 'tool/call', data: { name: 'ask_user_question' } }), 'waiting');
     assert.equal(reduceWorkStatus({ type: 'tool/result', data: {} }), 'result');
+    assert.equal(reduceWorkStatus({ type: 'approval/asked', data: {} }), 'waiting');
+  });
+
+  test('不认识的事件 → null（不切动画）', () => {
+    assert.equal(reduceWorkStatus({ type: 'todo/write', data: {} }), null);
   });
 });
 
