@@ -56,18 +56,20 @@ jobs:
           cache: npm
           cache-dependency-path: dsh-pet/package-lock.json
       - run: npm ci
-      # 便携版直接复用这份 Electron：package-app.mjs 从 DSH_PET_ELECTRON_DIR 拷贝
-      - run: npm install --no-save electron@43.3.0
       - run: npm run build
-      - name: Package
+      # 下 Electron 运行时。**不用 `npm i electron`**：那个包的 postinstall 在 CI 里会被跳过
+      # （实测 "added 3 packages in 1s"，dist/ 根本没下载），于是打包步骤找不到运行时。
+      # 走应用自己的 ensure-electron（@electron/get + SHA256 校验），与用户首次启动同一条路径。
+      - name: Download Electron runtime
         env:
-          DSH_PET_ELECTRON_DIR: ${{ github.workspace }}/dsh-pet/node_modules/electron/dist
+          DSH_PET_ELECTRON_MIRROR: https://github.com/electron/electron/releases/download/
+        run: npm run ensure:electron
+      - name: Package
         run: node scripts/package-app.mjs
       # Windows 额外产一个安装版（NSIS，per-user 安装，数据同样落在安装目录）
       - name: Installer (Windows only)
         if: runner.os == 'Windows'
         env:
-          DSH_PET_ELECTRON_DIR: ${{ github.workspace }}/dsh-pet/node_modules/electron/dist
           # Runner 在 GitHub 网络内，直接走官方源（脚本默认的 npmmirror 是给国内本地构建用的）
           ELECTRON_BUILDER_BINARIES_MIRROR: https://github.com/electron-userland/electron-builder-binaries/releases/download/
         run: npm run app:installer
