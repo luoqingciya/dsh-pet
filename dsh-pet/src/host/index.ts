@@ -42,11 +42,11 @@
  * 安全性：resolveAsset 做「防穿越」校验，保证路径仍在对应根目录内；
  *         PUT 保存经 saveUserConfig 白名单重建，id 过滤文件名非法字符。
  */
-import { createReadStream, existsSync, fstatSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { homedir } from 'node:os';
-import { join, normalize, resolve, sep } from 'node:path';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths';
 import { credentialRef } from '@deepseek-ai/dsh-credentials';
@@ -84,7 +84,18 @@ import {
   type HostNotifyFrame,
 } from './notify-events';
 import { profileNameFrom, storageEntries } from './storage-paths';
+import { createAssetPaths } from './assets';
 import { PollStateStore } from './state';
+import {
+  mimeOf,
+  readBody,
+  resolveAsset,
+  resolveExisting,
+  sendFile,
+  sendJson,
+  sendText,
+  type RouteResult,
+} from './http';
 import { timeContextOf } from './time-context';
 import {
   HelperProcess,
@@ -106,118 +117,13 @@ export const name = 'pet';
 /** 本包目录：宿主构建产物位于 lib/，其上一级即包根。 */
 const PACKAGE_ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 
-/** 包内 assets 根 */
-const PACKAGE_ROOT_ASSETS = join(PACKAGE_ROOT, 'assets');
-
-/** 包内表情包目录（表情包池的最后一环：assets/memes/<名称>.png） */
-const PACKAGE_MEMES_DIR = join(PACKAGE_ROOT_ASSETS, 'memes');
-
-/** 路由前缀 */
 const ROUTE_PREFIX = '/dsh-pet-7340';
-
-/** 不同扩展名对应的 Content-Type 映射 */
-const MIME: Record<string, string> = {
-  '.webm': 'video/webm',
-  '.mov': 'video/quicktime',
-  '.mp4': 'video/mp4',
-  '.png': 'image/png',
-  '.json': 'application/json; charset=utf-8',
-  '.jsonc': 'application/json; charset=utf-8',
-  '.ttf': 'font/ttf',
-  '.woff': 'font/woff',
-  '.woff2': 'font/woff2',
-};
-
-/**
- * 规范化并校验请求路径，确保它在 assets 根目录内（防路径穿越）。
- * @returns 规范化后的绝对文件路径；非法（穿越）时返回 undefined
- */
-function resolveAsset(root: string, rel: string): string | undefined {
-  if (rel.length === 0) return undefined;
-  const candidate = normalize(join(root, rel));
-  const rootWithSep = root.endsWith(sep) ? root : root + sep;
-  if (candidate !== root && !candidate.startsWith(rootWithSep)) return undefined;
-  return candidate;
-}
-
-/** 在 root 下解析并确认实体存在；非法（穿越）或不存在时返回 undefined */
-function resolveExisting(root: string, rel: string): string | undefined {
-  const candidate = resolveAsset(root, rel);
-  return candidate && existsSync(candidate) ? candidate : undefined;
-}
-
-/**
- * 流式返回一个文件（带 Content-Type / 长度 / 缓存头）。
- *
- * Content-Length 必须取自**正在读的那个 fd**（open 事件里 fstat），不能先 stat 再另开流：用户往
- * $DSH_HOME/dsh-pet/main-animation/webm/ 复制或同名覆盖素材时，stat 与真正开始读之间文件会被截断/
- * 改写，一旦实际字节数少于声明的长度，这个响应就**永远不结束、也不报错**（浏览器表现为 stalled、
- * 视频 loadeddata 永不触发且无 error）——正是 issue #62 现场"数据断供"的一种成因。同一个 fd 的
- * fstat 拿到的大小与随后读出的字节天然一致。
- */
-function sendFile(res: ServerResponse, file: string, contentType: string): void {
-  const stream = createReadStream(file);
-  stream.once('open', (fd) => {
-    if (res.destroyed || res.writableEnded) {
-      stream.destroy(); // 客户端在开流前就放弃了
-      return;
-    }
-    try {
-      res.writeHead(200, {
-        'content-type': contentType,
-        'content-length': fstatSync(fd).size,
-        'cache-control': 'public, max-age=3600',
-      });
-    } catch {
-      // 极端情况下 fstat 拿不到：不发长度头，交给 Node 用 chunked 收尾（长度天然一致，只是没声明）
-      res.writeHead(200, { 'content-type': contentType, 'cache-control': 'public, max-age=3600' });
-    }
-    stream.pipe(res);
-  });
-  // 读失败（文件被删/权限/被占用）：直接断连，让客户端立刻看到失败，而不是无限等待
-  stream.on('error', () => res.destroy());
-  // 客户端提前断开（快速切动画时高频发生）→ 停读，别把整个文件读完
-  res.on('close', () => stream.destroy());
-}
 
 // 配置的读取/校验/合并/保存全部收敛在 ./config（readAllConfig / saveUserConfig，host 自包含实现，
 // 不 import src/shared —— 宿主跑在 Node、渲染端跑在浏览器上下文，避免把 DOM 代码拖进来）。本文件不再保留任何配置逻辑，只消费成品返回值。
 
 /** 该宠物是否参与桌面模式（Electron 透明窗） */
 const isDesktopVisible = (display: unknown): boolean => display === 'desktop' || display === 'both';
-
-/** 发送 JSON 响应（headers 可选：如 no-cache 触发计数） */
-function sendJson(res: ServerResponse, status: number, obj: unknown, headers: Record<string, string> = {}): void {
-  const body = JSON.stringify(obj);
-  res.writeHead(status, {
-    'content-type': 'application/json; charset=utf-8',
-    'content-length': Buffer.byteLength(body),
-    ...headers,
-  });
-  res.end(body);
-}
-
-/** 发送纯文本响应（素材 404/400 等显式错误文案） */
-function sendText(res: ServerResponse, status: number, body: string): void {
-  res.writeHead(status, { 'content-type': 'text/plain; charset=utf-8' });
-  res.end(body);
-}
-
-/** 单次业务路由的应答（WebServer 注册与桌面 Helper 管道共用的同一契约；消费方各自落盘） */
-type RouteResult =
-  | { kind: 'json'; status: number; obj: unknown; headers?: Record<string, string> }
-  | { kind: 'text'; status: number; body: string }
-  | { kind: 'file'; file: string; contentType: string };
-
-/** 收集请求体（文本） */
-function readBody(req: IncomingMessage): Promise<string> {
-  return new Promise((resolve2, reject) => {
-    const chunks: Buffer[] = [];
-    req.on('data', (c: Buffer) => chunks.push(c));
-    req.on('end', () => resolve2(Buffer.concat(chunks).toString('utf8')));
-    req.on('error', reject);
-  });
-}
 
 // ---------------------------------------------------------------------------
 // 额外宠物（pet pack）说明：校验/扫描已收敛到 ./config（readAllConfig 内部逐字段合并），
@@ -247,27 +153,12 @@ export function apply(ctx: any): void {
   // 新文件已存在则不动旧文件）。失败不影响运行——读取侧对旧路径有回落。
   migrateUserConfig(configPaths, (msg) => console.log('[dsh-pet] ' + msg));
   // 用户动画目录（thumb 播放时优先于包内素材；webm 放 main-animation/webm/，mov（macOS 定制）放 main-animation/mov/）
-  const thumbUserRoot = join(userRoot, 'main-animation');
-  // 用户表情包目录（碎碎念/对话配图的图片：优先于包内 assets/memes，加图不必改包）
-  const memesUserRoot = join(userRoot, 'memes');
-  /**
-   * 表情包目录链 —— 与动画素材（/thumb）**同一套素材归属语义**：
-   *   - `pet/<素材根>-memes/` 存在（种类自带表情包）：**只查它**，池与路由都不回落——
-   *     查不到即 404 / 该条目剔除（与 `pet/<素材根>-animation/` 的独占规则逐字一致）；
-   *   - 否则：用户目录 `$DSH_HOME/dsh-pet/memes/` 优先，其次包内 `assets/memes/`（逐文件合并，
-   *     与「main-animation/<ext> → 包内 assets/<ext>」的主素材链同构）。
-   * 池（readMemePool）与路由（/pic/memes）必须走**同一个函数**：池里能选的名字，
-   * 路由必须取得到，否则气泡配图会图裂。
-   * 素材根一律先过 resolveAsset：它来自 URL 段，Windows 上 %5C 解出的反斜杠不会被
-   * rest.split('/') 切开，直接 join 会让 `..\..\x` 逃出用户根读盘（与 /thumb 同一道防线）。
-   */
-  const memeDirsFor = (assetRoot: string): string[] => {
-    const own = resolveAsset(petConfigDir, assetRoot + '-memes');
-    if (own !== undefined && existsSync(own)) return [own];
-    return [memesUserRoot, PACKAGE_MEMES_DIR];
-  };
   // 轮询统一状态（S）：前端 1s 轮询的**唯一**数据源（余额 / 工作状态 / 通知 / 宠物说话）。
   // 所有写入走 state.writeSection / writePet（由它统一更新 counter），见 ./state 的说明。
+  // 素材归属与目录解析（/thumb、/pic/memes、表情包池三处共用，见 ./assets）
+  const assetPaths = createAssetPaths({ packageRoot: PACKAGE_ROOT, userRoot, petConfigDir });
+  const { thumbUserRoot, memesUserRoot, memeDirsFor, assetRootFor, userRootFor } = assetPaths;
+
   const state = new PollStateStore();
   // 工作状态联动快照（/state 里的 sections.workStatus，桌面窗口 1s 轮询）：state=当前活动状态（null=空闲）、
   // task=当前任务详情、ts=最近变化时间（轮询侧检测变化用）。气泡文案不在此：浏览器读配置
@@ -765,15 +656,6 @@ export function apply(ctx: any): void {
     return desktopSyncQueue;
   };
 
-  /** 扩展名 → 素材子目录名（webm → webm/，mov → mov/；其余落在动画目录平级放行） */
-  const animSubdirFor = (ext: string): string => (ext === '.mov' ? 'mov' : 'webm');
-
-  /** 包内动画素材根：按扩展名取子目录（webm/ 随包发布；mov/ 不存在时为 404 兜底，仅 macOS 自维护）。 */
-  const assetRootFor = (ext: string): string => join(PACKAGE_ROOT, 'assets', animSubdirFor(ext));
-
-  /** 用户动画根：按扩展名取子目录（main-animation/webm 或 main-animation/mov）。 */
-  const userRootFor = (ext: string): string => join(thumbUserRoot, animSubdirFor(ext));
-
   /** 单次业务路由(WebServer 注册 → HTTP 落盘 / 桌面 Helper 管道 → scheme 应答,共用同一份实现):
    *  输入只需 rawUrl(/dsh-pet-7340/... + 查询) + method + body 文本;返回 RouteResult(JSON/文本/文件),
    *  消费方各自落盘——业务逻辑只有一份,两端天然一致(硬契约:浏览器/桌面行为严格对齐)。 */
@@ -1195,8 +1077,7 @@ export function apply(ctx: any): void {
       const fontRoot = join(PACKAGE_ROOT, 'assets', 'fonts');
       const fontFile = resolveExisting(fontRoot, restParts.join('/'));
       if (fontFile === undefined) return { kind: 'text', status: 404, body: 'dsh-pet: font not found' };
-      const ext = fontFile.slice(fontFile.lastIndexOf('.')).toLowerCase();
-      return { kind: 'file', file: fontFile, contentType: MIME[ext] ?? 'application/octet-stream' };
+      return { kind: 'file', file: fontFile, contentType: mimeOf(fontFile) };
     }
 
     // 通知图标：/dsh-pet-7340/pic/<file> → 包内 assets/pic（方形 png，系统通知 icon 用）
@@ -1220,14 +1101,12 @@ export function apply(ctx: any): void {
           if (picFile !== undefined) break;
         }
         if (picFile === undefined) return { kind: 'text', status: 404, body: 'dsh-pet: pic not found' };
-        const ext = picFile.slice(picFile.lastIndexOf('.')).toLowerCase();
-        return { kind: 'file', file: picFile, contentType: MIME[ext] ?? 'application/octet-stream' };
+        return { kind: 'file', file: picFile, contentType: mimeOf(picFile) };
       }
       const picRoot = join(PACKAGE_ROOT, 'assets', 'pic');
       const picFile = resolveExisting(picRoot, restParts.join('/'));
       if (picFile === undefined) return { kind: 'text', status: 404, body: 'dsh-pet: pic not found' };
-      const ext = picFile.slice(picFile.lastIndexOf('.')).toLowerCase();
-      return { kind: 'file', file: picFile, contentType: MIME[ext] ?? 'application/octet-stream' };
+      return { kind: 'file', file: picFile, contentType: mimeOf(picFile) };
     }
 
     if (scope !== 'thumb') {
@@ -1263,7 +1142,7 @@ export function apply(ctx: any): void {
         ? resolveExisting(extraAnimDir, fileName)
         : (resolveExisting(userRootFor(ext), fileName) ?? resolveExisting(assetRootFor(ext), fileName));
     if (file === undefined) return { kind: 'text', status: 404, body: 'dsh-pet: asset not found' };
-    return { kind: 'file', file, contentType: MIME[ext] ?? 'application/octet-stream' };
+    return { kind: 'file', file, contentType: mimeOf(file) };
   };
 
   ctx.effect(
