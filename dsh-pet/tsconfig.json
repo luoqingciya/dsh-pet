@@ -13,7 +13,13 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
     "noUnusedLocals": true,
-    "noUnusedParameters": true
+    "noUnusedParameters": true,
+    "baseUrl": ".",
+    "paths": {
+      "@deepseek-ai/dsh-home-paths": ["./src/app/shims/dsh-home-paths.ts"],
+      "@deepseek-ai/dsh-credentials": ["./src/app/shims/dsh-credentials.ts"],
+      "@deepseek-ai/dsh-llm": ["./src/app/shims/dsh-llm.ts"]
+    }
   },
   "include": ["src"],
   "exclude": ["src/**/*.test.ts"]

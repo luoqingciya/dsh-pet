@@ -84,11 +84,44 @@ describe('normalizeAppConfig', () => {
   });
 });
 
+describe('内置端点预设', () => {
+  test('DeepSeek 预设用的是现行模型名（2026-07-24 起 deepseek-chat / deepseek-reasoner 已停用）', () => {
+    const deepseek = DEFAULT_APP_CONFIG.endpoints.find((e) => e.id === 'deepseek-official');
+    assert.ok(deepseek, '必须有 deepseek-official 端点（余额路由按这个 id 匹配）');
+    assert.ok(deepseek.models.includes('deepseek-flash'), 'deepseek-flash 是现行默认模型');
+    for (const retired of ['deepseek-chat', 'deepseek-reasoner']) {
+      assert.ok(!deepseek.models.includes(retired), `预设里不得再出现已停用的 ${retired}`);
+    }
+    assert.equal(DEFAULT_APP_CONFIG.model, 'deepseek-flash');
+  });
+
+  test('DeepSeek 预设关掉思考模式（桌宠只要一句话，开着白等推理）', () => {
+    const deepseek = DEFAULT_APP_CONFIG.endpoints.find((e) => e.id === 'deepseek-official');
+    assert.equal(deepseek?.thinking, 'off');
+  });
+
+  test('每个预设的地址都是 http(s) 且没有尾斜杠（除"自定义"留空）', () => {
+    for (const endpoint of DEFAULT_APP_CONFIG.endpoints) {
+      if (endpoint.id === 'custom') {
+        assert.equal(endpoint.baseUrl, '');
+        continue;
+      }
+      assert.match(endpoint.baseUrl, /^https?:\/\//, `${endpoint.id} 的 baseUrl 必须以 http(s) 开头`);
+      assert.ok(!endpoint.baseUrl.endsWith('/'), `${endpoint.id} 的 baseUrl 不应带尾斜杠`);
+    }
+  });
+
+  test('端点 id 唯一（provider 选择与余额路由都按 id 匹配）', () => {
+    const ids = DEFAULT_APP_CONFIG.endpoints.map((e) => e.id);
+    assert.equal(new Set(ids).size, ids.length);
+  });
+});
+
 describe('配置文件读写', () => {
   test('没有文件时读到默认配置（含默认模型）', () => {
     const config = readAppConfig();
     assert.equal(config.provider, 'deepseek-official');
-    assert.equal(config.model, 'deepseek-chat');
+    assert.equal(config.model, 'deepseek-flash');
   });
 
   test('保存后能原样读回，且白名单外的字段不落盘', () => {

@@ -137,15 +137,6 @@ const PACKAGE_MEMES_DIR = join(PACKAGE_ROOT_ASSETS, 'memes');
 /** 路由前缀 */
 const ROUTE_PREFIX = '/dsh-pet-7340';
 
-/**
- * 宿主是不是 **DSH 桌面应用**（Electron 宿主）。
- *
- * 判据只用 `process.versions.electron`：桌面应用以 `ELECTRON_RUN_AS_NODE=1` 跑宿主（见 dsh.cmd），
- * 该字段照样在；而 `dsh web` / 独立模式都是纯 Node 进程，取不到它。据此把「打开网站」自动分派：
- * 桌面宿主 → 唤起桌面应用窗口（helper 走 `dsh://open`），其余 → 浏览器打开站点。
- */
-const isDesktopHost = (): boolean => Boolean(process.versions.electron);
-
 /** 不同扩展名对应的 Content-Type 映射 */
 const MIME: Record<string, string> = {
   '.webm': 'video/webm',
@@ -692,18 +683,6 @@ export function apply(ctx: any): void {
   /** 「无图形环境」提示只在进程生命周期内打一次，避免守护循环刷屏 */
   let displayWarned = false;
 
-  /**
-   * 宿主形态（由 ctx 提供，可缺失）：`'app'` = 本地应用。
-   *
-   * 为什么需要它：`isDesktopHost()` 只能判断"宿主是不是 Electron"，而**本地应用也是 Electron**
-   * ——但本地应用没有 DSH 主窗口，右键「打开网站」不该去唤起 `dsh://open`，而应打开它自己的
-   * 设置页。DSH 宿主不提供这个能力，判定结果与改造前逐字一致。
-   */
-  const hostKind = (): string => {
-    const read = (ctx as { petHostKind?: () => unknown }).petHostKind;
-    return typeof read === 'function' ? String(read() || '') : '';
-  };
-
   /** 用已确认存在的 Electron 路径拉起桌面 Helper（每只桌面宠物一个局部小窗口）。 */
   const launchHelper = (electronPath: string | undefined): void => {
     if (helper || disposed) return;
@@ -736,10 +715,6 @@ export function apply(ctx: any): void {
           DSH_PET_CONFIG_URL: configUrl,
           // 已鉴权站点 URL（含本进程启动令牌）：只供 helper 的「打开网站」使用，任何日志都不许出现它
           DSH_PET_SITE_URL: siteUrl,
-          // 宿主形态决定工具项「打开网站」的去向（同名菜单项，两端两种语义）：
-          //   desktop = 宿主是 DSH 桌面应用 → 唤起桌面应用主窗口（helper 走 dsh://open，见 main.js）
-          //   site    = dsh web / 独立模式 → 系统默认浏览器打开站点（原行为，别破坏）
-          DSH_PET_OPEN_TARGET: isDesktopHost() && hostKind() !== 'app' ? 'desktop' : 'site',
           DSH_PET_SCALE: '1',
           // 打开 bridge 协议：main.js 注册 dsh-pet-bridge scheme，把渲染端请求经管道转给宿主
           DSH_PET_BRIDGE: '1',

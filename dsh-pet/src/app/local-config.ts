@@ -27,6 +27,14 @@ export interface AppEndpoint {
   apiKeyRef: string;
   /** 已知模型清单（空 = 运行时向 `GET {baseUrl}/models` 拉取） */
   models: string[];
+  /**
+   * 是否在请求体里显式关闭「思考模式」（`{"thinking":{"type":"disabled"}}`）。
+   *
+   * 只有明确支持的端点才写——未知字段对严格的 OpenAI 兼容实现可能直接 400。
+   * DeepSeek V4 默认开启思考（见其 Thinking Mode 文档）：桌宠只要一句碎碎念，
+   * 开着思考会白等几秒推理、多花推理 token，所以预设里关掉。
+   */
+  thinking?: 'off';
 }
 
 /** 通知开关（本地应用只保留两类可观测事件，见 notifications.ts） */
@@ -50,14 +58,24 @@ export interface AppConfig {
   notify: AppNotifyConfig;
 }
 
-/** 内置端点（`endpoints` 缺失/损坏时的兜底，也是首次启动的初始值） */
+/**
+ * 内置端点（`endpoints` 缺失/损坏时的兜底，也是首次启动的初始值）。
+ *
+ * 维护口径：**地址写死、模型清单尽量留空**。留空时设置页会向端点的 `GET /models` 现拉，
+ * 比在代码里硬编码一串会过期的模型名可靠（2026-07 DeepSeek 就把 `deepseek-chat` /
+ * `deepseek-reasoner` 换成了 `deepseek-flash` / `deepseek-v4-pro`，硬编码的老名字会让
+ * 所有用户在同一天一起 404）。只有「官方明确、且短期不会变」的模型才写进清单。
+ */
 export const DEFAULT_ENDPOINTS: AppEndpoint[] = [
   {
     id: 'deepseek-official',
     name: 'DeepSeek 官方',
+    // 官方 OpenAI 兼容根地址就是 https://api.deepseek.com（加不加 /v1 都通，这里用带版本号的写法）
     baseUrl: 'https://api.deepseek.com/v1',
     apiKeyRef: 'DEEPSEEK_API_KEY',
-    models: ['deepseek-chat', 'deepseek-reasoner'],
+    // 2026-07-24 起 deepseek-chat / deepseek-reasoner 已停用，现行模型是这两个
+    models: ['deepseek-flash', 'deepseek-v4-pro'],
+    thinking: 'off',
   },
   {
     id: 'ollama',
@@ -65,6 +83,20 @@ export const DEFAULT_ENDPOINTS: AppEndpoint[] = [
     baseUrl: 'http://127.0.0.1:11434/v1',
     apiKeyRef: '',
     models: [],
+  },
+  {
+    id: 'openai',
+    name: 'OpenAI',
+    baseUrl: 'https://api.openai.com/v1',
+    apiKeyRef: 'OPENAI_API_KEY',
+    models: [],
+  },
+  {
+    id: 'dashscope',
+    name: '阿里云百炼（通义千问）',
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    apiKeyRef: 'DASHSCOPE_API_KEY',
+    models: ['qwen-plus', 'qwen-max', 'qwen-long'],
   },
   {
     id: 'custom',
@@ -75,11 +107,11 @@ export const DEFAULT_ENDPOINTS: AppEndpoint[] = [
   },
 ];
 
-/** 默认配置 */
+/** 默认配置（首次启动即用：DeepSeek 官方 + 现行模型） */
 export const DEFAULT_APP_CONFIG: AppConfig = {
   version: 1,
   provider: 'deepseek-official',
-  model: 'deepseek-chat',
+  model: 'deepseek-flash',
   balanceProvider: '',
   endpoints: DEFAULT_ENDPOINTS,
   notify: { chatReply: true, balanceAlert: true },
@@ -123,6 +155,8 @@ function normalizeEndpoint(raw: unknown, index: number): AppEndpoint | undefined
     baseUrl: str(obj.baseUrl, fallback.baseUrl),
     apiKeyRef: typeof obj.apiKeyRef === 'string' ? obj.apiKeyRef.trim() : fallback.apiKeyRef,
     models: strList(obj.models),
+    // 只认 'off'：其余值（含手改的错字）一律当"未声明"，绝不把未知字段发给端点
+    ...(obj.thinking === 'off' ? { thinking: 'off' as const } : {}),
   };
 }
 

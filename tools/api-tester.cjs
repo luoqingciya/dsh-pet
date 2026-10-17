@@ -7,8 +7,8 @@
  * 所以这里起一个同源小服务：转发到宿主，并补上 CORS 头。
  *
  * 用法：
- *   node tools/api-tester.cjs                # 默认探测 3080，自动开浏览器
- *   node tools/api-tester.cjs --port 3080    # 指定宿主端口
+ *   node tools/api-tester.cjs                # 默认探测 7340，自动开浏览器
+ *   node tools/api-tester.cjs --port 7340    # 指定宿主端口
  *   node tools/api-tester.cjs --no-open      # 不自动开浏览器
  *
  * 也可以用 --dir 指向别的静态目录（默认 tools/ 自身），方便调试别的页面。
@@ -32,7 +32,7 @@ const PAGE = argOf('--page', 'api-tester.html');
 const NO_OPEN = argv.includes('--no-open');
 
 /** 转发目标端口：测试页上的输入框可以改它（经 /__target），所以是可变状态 */
-let hostPort = Number(argOf('--port', '3080'));
+let hostPort = Number(argOf('--port', '7340'));
 
 /** 路由前缀：与 src/host/index.ts 的 ROUTE_PREFIX 一致（7340 是名字，不是端口） */
 const PREFIX = '/dsh-pet-7340';

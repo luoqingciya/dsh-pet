@@ -6,7 +6,7 @@
  *   - 本地服务：`./local-panel` —— 模型端点、API Key、余额服务商、通知开关。
  *
  * 为什么设置页走 HTTP 而不是 Electron IPC：页面与宿主同源，`/dsh-pet-7340/*` 与 `/app/api/*`
- * 直接可用；顺带让排障时能用普通浏览器打开同一页（`http://127.0.0.1:3080/app/`）。
+ * 直接可用；顺带让排障时能用普通浏览器打开同一页（`http://127.0.0.1:7340/app/`）。
  */
 import { useEffect, useState, type ReactElement } from 'react';
 import { createRoot } from 'react-dom/client';

@@ -2,7 +2,7 @@ openapi: 3.1.0
 
 info:
   title: dsh-pet HTTP API
-  version: 0.4.0
+  version: 0.4.1
   summary: dsh-pet 本地 HTTP 接口
   description: |
     dsh-pet 在本地 `127.0.0.1` 上起一个 HTTP 服务，把全部能力挂在**一条前缀路由** `/dsh-pet-7340` 下。
@@ -11,10 +11,10 @@ info:
 
     ## 部署形态
 
-    接口挂在本地服务上，默认端口 3080（被占用会自动顺延）：
+    接口挂在本地服务上，默认端口 7340（被占用会自动顺延）：
 
     - `servers` 里的 `http://127.0.0.1:{port}` 是占位：`{port}` 就是应用实际监听的端口
-      （默认 3080，被占用会自动顺延；可用 `--port` 或 `DSH_PET_APP_PORT` 指定）。
+      （默认 7340，被占用会自动顺延；可用 `--port` 或 `DSH_PET_APP_PORT` 指定）。
     - 只监听 **127.0.0.1**，不对外网暴露，也**没有任何鉴权**：任何能访问本机该端口的进程都能调用。
       请勿把该端口转发/代理到公网。
     - 桌面透明窗不走 HTTP，而是 `dsh-pet-bridge://` 自定义 scheme 经主进程管道转发到**同一个**
@@ -23,7 +23,7 @@ info:
     ## 两分钟上手
 
     ```bash
-    BASE=http://127.0.0.1:3080/dsh-pet-7340
+    BASE=http://127.0.0.1:7340/dsh-pet-7340
 
     # 1. 拉一次统一状态（只读、零副作用，可以随便轮询）
     curl -s $BASE/state
@@ -63,11 +63,11 @@ externalDocs:
 servers:
   - url: http://127.0.0.1:{port}
     description: |
-      本机本地服务。`{port}` 默认 3080。
+      本机本地服务。`{port}` 默认 7340。
       路由前缀固定为 `/dsh-pet-7340`（7340 是历史遗留的名字，**不是端口号**）。
     variables:
       port:
-        default: "3080"
+        default: "7340"
         description: 本地服务实际监听的端口
 
 tags:

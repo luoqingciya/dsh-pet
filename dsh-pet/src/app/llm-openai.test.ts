@@ -21,6 +21,8 @@ let baseUrl = '';
 
 /** 上游行为开关：每个用例自己摆 */
 const mode: { kind: 'ok' | 'error' | 'split' } = { kind: 'ok' };
+/** 最近一次 /chat/completions 的请求体（断言「关思考」字段是否发出） */
+let lastRequestBody: Record<string, unknown> = {};
 
 before(async () => {
   server = createServer((req, res) => {
@@ -30,24 +32,34 @@ before(async () => {
       return;
     }
     if (req.url === '/v1/chat/completions') {
-      if (mode.kind === 'error') {
-        res.writeHead(401, { 'content-type': 'application/json' });
-        res.end(JSON.stringify({ error: { message: 'invalid api key' } }));
-        return;
-      }
-      res.writeHead(200, { 'content-type': 'text/event-stream' });
-      const chunks = [{ choices: [{ delta: { content: '你好' } }] }, { choices: [{ delta: { content: '，世界' } }] }];
-      const payload = chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join('') + 'data: [DONE]\n\n';
-      if (mode.kind === 'split') {
-        // 故意在一个 JSON 行中间切开：按块解析会炸，按行缓冲才对
-        res.write(payload.slice(0, 20));
-        setTimeout(() => {
-          res.write(payload.slice(20));
-          res.end();
-        }, 20);
-        return;
-      }
-      res.end(payload);
+      // 先把请求体收完再回（断言要看请求体，且不能让连接提前断）
+      let raw = '';
+      req.on('data', (chunk) => (raw += chunk));
+      req.on('end', () => {
+        try {
+          lastRequestBody = JSON.parse(raw || '{}') as Record<string, unknown>;
+        } catch {
+          lastRequestBody = {};
+        }
+        if (mode.kind === 'error') {
+          res.writeHead(401, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ error: { message: 'invalid api key' } }));
+          return;
+        }
+        res.writeHead(200, { 'content-type': 'text/event-stream' });
+        const chunks = [{ choices: [{ delta: { content: '你好' } }] }, { choices: [{ delta: { content: '，世界' } }] }];
+        const payload = chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join('') + 'data: [DONE]\n\n';
+        if (mode.kind === 'split') {
+          // 故意在一个 JSON 行中间切开：按块解析会炸，按行缓冲才对
+          res.write(payload.slice(0, 20));
+          setTimeout(() => {
+            res.write(payload.slice(20));
+            res.end();
+          }, 20);
+          return;
+        }
+        res.end(payload);
+      });
       return;
     }
     res.writeHead(404).end();
@@ -62,7 +74,7 @@ after(async () => {
 });
 
 /** 造一份指向本机 mock 的配置 */
-function configWith(options: { apiKeyRef?: string; models?: string[] } = {}): AppConfig {
+function configWith(options: { apiKeyRef?: string; models?: string[]; thinking?: 'off' } = {}): AppConfig {
   return normalizeAppConfig({
     provider: 'mock',
     model: 'mock-a',
@@ -73,6 +85,7 @@ function configWith(options: { apiKeyRef?: string; models?: string[] } = {}): Ap
         baseUrl,
         apiKeyRef: options.apiKeyRef ?? 'MOCK_KEY',
         models: options.models ?? [],
+        ...(options.thinking ? { thinking: options.thinking } : {}),
       },
     ],
   });
@@ -129,6 +142,25 @@ describe('llm.stream', () => {
     const llm = createLlmService({ config: () => configWith(), secrets: () => ({ MOCK_KEY: 'k' }) });
     await assert.rejects(collect(llm.stream({ provider: 'mock', model: 'mock-a' })), /HTTP 401.*invalid api key/s);
     mode.kind = 'ok';
+  });
+});
+
+describe('思考模式开关', () => {
+  test('端点声明 thinking=off → 请求体带 {thinking:{type:"disabled"}}', async () => {
+    mode.kind = 'ok';
+    const llm = createLlmService({
+      config: () => configWith({ thinking: 'off' }),
+      secrets: () => ({ MOCK_KEY: 'k' }),
+    });
+    await collect(llm.stream({ provider: 'mock', model: 'mock-a', messages: [] }));
+    assert.deepEqual(lastRequestBody.thinking, { type: 'disabled' });
+  });
+
+  test('未声明的端点不带这个字段（严格实现可能因未知字段 400）', async () => {
+    mode.kind = 'ok';
+    const llm = createLlmService({ config: () => configWith(), secrets: () => ({ MOCK_KEY: 'k' }) });
+    await collect(llm.stream({ provider: 'mock', model: 'mock-a', messages: [] }));
+    assert.equal('thinking' in lastRequestBody, false);
   });
 });
 

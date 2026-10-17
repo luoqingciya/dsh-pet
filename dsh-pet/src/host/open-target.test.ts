@@ -1,18 +1,13 @@
 /**
- * 「打开网站」按宿主形态自动分派的契约测试（宿主 = DSH 桌面应用 / dsh web）。
+ * 右键菜单「打开设置」的接线守卫。
  *
- * 需求：同一个工具项，宿主是**桌面应用**时要"打开桌面端"（把主窗口叫回前台），宿主是 web 时才是
- * "打开网站"（浏览器打开站点）。两半各自构建、无法互相 import，所以按本仓库既有做法读源码断言。
+ * 链路（改一侧就会断，所以按本仓库既有做法读源码断言）：
+ *   宿主 index.ts 把站点地址（`DSH_PET_SITE_URL` = 本地服务 origin）注入 Helper
+ *   → helper main.js 的 `pet:open-site` 用系统默认浏览器打开它
+ *   → 渲染端菜单首项是「打开设置」，action 固定为 `open-site`。
  *
- * 链路（改名/改判据只改一侧即失败）：
- *   宿主 index.ts 判 isDesktopHost → 注入 DSH_PET_OPEN_TARGET=desktop|site
- *   → helper main.js 读该变量（并沿 query 透给渲染端）→ desktop: shell.openExternal('dsh://open')，
- *     site: 原行为 shell.openExternal(站点 URL) → 渲染端据此改菜单文案。
- *
- * 为什么是 `dsh://open` 而不是 spawn 宿主 exe：DSH 桌面端自己 app.setAsDefaultProtocolClient('dsh') 并
- * 注册了 open-url → focusPrimaryWindow()，Windows 上再启动一次则由单实例锁把 second-instance 交给
- * 现有实例（claimDesktopSingleInstance(app, () => focusPrimaryWindow())）。spawn exe 会继承宿主的
- * ELECTRON_RUN_AS_NODE=1（起出来是 node 而非界面），还要自己探测安装路径——协议两样都不用管。
+ * 应用形态只有一种（本地桌面应用），因此不再有「按宿主形态分派」这层间接：
+ * 菜单不写死地址，地址由宿主注入——换端口（`--port`）时菜单自动跟着走。
  */
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
@@ -24,62 +19,40 @@ const readSource = (rel: string): string => readFileSync(fileURLToPath(new URL(r
 
 const host = readSource('./index.ts');
 const main = readSource('../../runtime/electron-helper/main.js');
-const constants = readSource('../../runtime/electron-helper/constants.js');
+const preload = readSource('../../runtime/electron-helper/preload.js');
 const sprite = readSource('../../runtime/electron-helper/sprite.js');
-const appContext = readSource('../app/context.ts');
 
-describe('「打开网站」按宿主形态自动分派', () => {
-  test('宿主：桌面应用判定 + 形态注入', () => {
+describe('右键「打开设置」', () => {
+  test('宿主：注入站点地址，且不再有宿主形态分派', () => {
+    assert.ok(/DSH_PET_SITE_URL: siteUrl/.test(host), 'launchHelper 必须把站点地址注入 Helper（否则菜单项没有目标）');
     assert.ok(
-      /const isDesktopHost = \(\): boolean => Boolean\(process\.versions\.electron\)/.test(host),
-      '宿主必须用 process.versions.electron 判定形态（桌面应用以 ELECTRON_RUN_AS_NODE 跑，该字段仍在；纯 Node 宿主不是）',
+      /const siteUrl = ctx\.connection\.authenticatedUrl\(origin\)/.test(host),
+      '站点地址要经 connection.authenticatedUrl 取（本地实现恒等返回 origin）',
     );
     assert.ok(
-      /DSH_PET_OPEN_TARGET: isDesktopHost\(\) && hostKind\(\) !== 'app' \? 'desktop' : 'site'/.test(host),
-      'launchHelper 必须把形态注入 Helper；本地应用（petHostKind = app）必须排除在 desktop 之外',
-    );
-    assert.ok(
-      /petHostKind\?: \(\) => unknown/.test(host),
-      '宿主必须软取 petHostKind（DSH 不提供该能力，行为与改造前一致）',
+      !/DSH_PET_OPEN_TARGET/.test(host),
+      '应用形态只有一种，不得再注入 DSH_PET_OPEN_TARGET（否则会误导后来的人以为还有第二种宿主）',
     );
   });
 
-  test('helper 主进程：desktop 走 dsh:// 协议，site 保持原行为', () => {
+  test('helper 主进程：pet:open-site 用默认浏览器打开，且没有 dsh:// 分支', () => {
     assert.ok(
-      /const OPEN_TARGET = process\.env\.DSH_PET_OPEN_TARGET === 'desktop' \? 'desktop' : 'site'/.test(main),
-      "main.js 必须把非 'desktop' 一律当 'site'（旧宿主 / 独立模式 / 手写 start-desktop 行为不得变）",
+      /ipcMain\.on\('pet:open-site',[\s\S]*?openSite\(url\)/.test(main),
+      'main.js 必须把 open-site 交给 openSite(url)',
     );
-    assert.ok(/openTarget: OPEN_TARGET/.test(main), '形态要沿窗口 query 透到渲染端（文案在那里决定）');
-    assert.ok(/shell\.openExternal\('dsh:\/\/open'\)/.test(main), '桌面宿主必须走 dsh://open 唤起应用窗口');
-    assert.ok(
-      /OPEN_TARGET === 'desktop'\) \{[\s\S]*?openSite\(url\)/.test(main),
-      'dsh:// 失败要回落成打开站点（协议未注册时不能"点了没反应"）',
-    );
-    assert.ok(
-      /const openSite = \(url\) => \{[\s\S]*?shell\.openExternal\(target\)/.test(main),
-      'site 路径（含回落）必须仍是原来那条打开站点的实现',
-    );
-    assert.ok(
-      (main.match(/dsh:\/\/open/g) ?? []).length === 1,
-      'dsh://open 只允许出现在 desktop 分支里（site 形态不得被顺带改成唤起应用）',
-    );
+    assert.ok(!/dsh:\/\/open/.test(main), '不得残留 dsh://open（那是 DSH 桌面端的协议）');
+    assert.ok(!/OPEN_TARGET/.test(main), '不得残留 OPEN_TARGET（形态分派已删除）');
   });
 
-  test('helper 渲染端：文案随形态变，动作名不变', () => {
-    assert.ok(
-      /const OPEN_TARGET = params\.get\('openTarget'\) === 'desktop' \? 'desktop' : 'site'/.test(constants),
-      "constants.js 必须从 query 读形态且默认 'site'",
-    );
-    assert.ok(
-      /label: OPEN_TARGET === 'desktop' \? '打开 DeepSeek Harness' : '打开网站', action: 'open-site'/.test(sprite),
-      '菜单文案要跟着变，但 action 仍是 open-site（另一端只认这个动作名）',
-    );
+  test('preload 暴露窗口控制原语', () => {
+    assert.ok(/openDshSite\(url\)/.test(preload), 'preload 必须暴露 openDshSite(url)');
   });
 
-  test('本地应用声明 petHostKind=app → 自动回落 site（打开的是自己的设置页）', () => {
+  test('渲染端：菜单首项是「打开设置」，action 仍是 open-site', () => {
     assert.ok(
-      /petHostKind: \(\): string => 'app'/.test(appContext),
-      '本地应用必须声明宿主形态，否则会去唤起 dsh://open',
+      /label: '打开设置', action: 'open-site'/.test(sprite),
+      '菜单首项必须是「打开设置」+ open-site（文案与动作名都只在这一处）',
     );
+    assert.ok(!/OPEN_TARGET/.test(sprite), '渲染端不得残留 OPEN_TARGET');
   });
 });

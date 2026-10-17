@@ -150,13 +150,6 @@ export function createAppContext(options: AppContextOptions): AppContext {
      * 空串 = 跟随主服务商。宿主半边会优先读这个能力（DSH 内不提供，行为不变）。
      */
     petBalanceProvider: (): string => configOf().balanceProvider,
-
-    /**
-     * 宿主形态 = 本地应用。宿主据此把右键「打开网站」指向本应用的设置页
-     * （而不是 DSH 的 `dsh://open`）——本地应用同样是 Electron，光看 `process.versions.electron`
-     * 分不出来。
-     */
-    petHostKind: (): string => 'app',
   };
 
   return {

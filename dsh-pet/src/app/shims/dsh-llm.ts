@@ -43,17 +43,28 @@ export interface StandaloneTextBlock {
 }
 
 /**
- * 流式文本拼装：只收集文本块（与调用方 `blocks().filter(b => b.type === 'text')` 的用法一致）。
- * 独立模式只会拿到空流（没有模型后端），这里保持最小可用实现。
+ * 流式文本拼装：收集文本块，并记录终止块给出的失败原因。
+ *
+ * 输入块兼容两种文本形状——`{type:'text-delta', text}`（DSH 适配器的增量块，测试里也用它）
+ * 与 `{type:'text', text}`（本应用的 `llm-openai` 直接吐完整块）；`{type:'finish', reason}`
+ * 是终止块：DSH 把适配器抛错**折进终止块**（流里不抛），调用方读 `finish` 生成失败文案。
  */
 export class BlockAssembler {
   private readonly chunks: string[] = [];
 
-  /** 收集一个块；非文本块（工具调用等）在独立模式下被忽略 */
+  /** 终止原因（来自 `{type:'finish'}` 块；没有终止块时为 undefined） */
+  finish?: { kind?: string; failure?: { message?: string; code?: string } };
+
+  /** 收集一个块；工具调用等非文本块在本地实现里被忽略 */
   push(chunk: unknown): void {
-    if (chunk !== null && typeof chunk === 'object' && (chunk as { type?: unknown }).type === 'text') {
-      const text = (chunk as { text?: unknown }).text;
-      if (typeof text === 'string') this.chunks.push(text);
+    if (chunk === null || typeof chunk !== 'object') return;
+    const block = chunk as { type?: unknown; text?: unknown; reason?: unknown };
+    if ((block.type === 'text' || block.type === 'text-delta') && typeof block.text === 'string') {
+      this.chunks.push(block.text);
+      return;
+    }
+    if (block.type === 'finish') {
+      this.finish = block.reason as BlockAssembler['finish'];
     }
   }
 

@@ -14,8 +14,8 @@
  * 数据目录是应用自己的 `app.getPath('userData')`。
  */
 import { app, BrowserWindow, Menu, Notification, Tray, nativeImage, shell } from 'electron';
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 
 import { apply } from '../host/index';
 import { listenAppServer } from './server';
@@ -50,9 +50,44 @@ function resolvePackageRoot(): string {
 /** 包根目录 */
 const PACKAGE_ROOT = resolvePackageRoot();
 
-// 宿主半边把「用户数据根」统一叫 DSH_HOME（$DSH_HOME/dsh-pet/…）。本地应用把它指向自己的
-// userData，于是配置、素材、记忆全部落在应用目录里，路径推导一行不用改。
-process.env.DSH_HOME = app.getPath('userData');
+/**
+ * 数据根目录。
+ *
+ * **打包版：数据跟着程序走**（免安装 zip 与安装版都一样）——配置、素材、记忆、日志全部落在
+ * `<可执行文件目录>/data`，拷走整个目录即迁移，卸载即删干净，不往 `%APPDATA%` 留东西。
+ * 安装版走 per-user 安装（`%LOCALAPPDATA%\Programs\dsh-pet`），该目录对当前用户可写，
+ * 所以这条规则成立；万一装到了只读位置（有人手动挪进 Program Files），探测失败就回落到
+ * 用户目录，并在日志里说明——绝不因为写不进去就起不来。
+ *
+ * 开发态（`npm run app`）没有"安装目录"概念，仍用 Electron 的 userData。
+ */
+function resolveDataRoot(): string {
+  if (!app.isPackaged) return app.getPath('userData');
+  const beside = join(dirname(process.execPath), 'data');
+  try {
+    mkdirSync(beside, { recursive: true });
+    // 真写一次：目录存在不等于可写（Program Files 下普通用户可创建失败或写入被拒）
+    const probe = join(beside, '.write-probe');
+    writeFileSync(probe, 'ok', 'utf8');
+    rmSync(probe, { force: true });
+    return beside;
+  } catch {
+    return app.getPath('userData');
+  }
+}
+
+/** 数据根目录（宿主半边眼里就是 DSH_HOME） */
+const DATA_ROOT = resolveDataRoot();
+
+// 宿主半边把「用户数据根」统一叫 DSH_HOME（$DSH_HOME/dsh-pet/…）。指向数据根之后，
+// 配置、素材、记忆的路径推导一行不用改。
+process.env.DSH_HOME = DATA_ROOT;
+// Electron 自己的 profile（Chromium 缓存 / GPU 缓存）也收进数据目录，否则便携版会在
+// %APPDATA% 留一份同名目录——"拷走即迁移"就不成立了。
+if (app.isPackaged) {
+  app.setPath('userData', join(DATA_ROOT, 'electron'));
+  app.setPath('sessionData', join(DATA_ROOT, 'electron'));
+}
 // 桌面 Helper 用同一份 Electron 二进制（打包版即应用自带的那份，开发态即缓存里的那份）
 process.env.DSH_PET_ELECTRON_PATH = process.execPath;
 
@@ -306,7 +341,7 @@ async function bootstrap(): Promise<void> {
   server = await listenAppServer({
     routes,
     logger: log,
-    port: Number(process.env.DSH_PET_APP_PORT ?? 3080),
+    port: Number(process.env.DSH_PET_APP_PORT ?? 7340),
     status: () => ({
       name: 'dsh-pet-app',
       version: appVersion(),

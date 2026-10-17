@@ -23,17 +23,27 @@
 
 ## 快速开始
 
-### 方式一：便携版（推荐）
+### 方式一：安装版（Windows）
 
-到 [Releases](https://github.com/luoqingciya/dsh-pet/releases) 下载对应平台的压缩包，解压后：
+到 [Releases](https://github.com/luoqingciya/dsh-pet/releases) 下载 `dsh-pet-setup-<版本>.exe`，
+双击安装。装到当前用户目录（`%LOCALAPPDATA%\Programs\dsh-pet`），不需要管理员权限，
+开始菜单与桌面都有快捷方式。
+
+**数据就在安装目录下的 `data/`**：卸载时随程序一起删除，不往系统盘其它地方留东西。
+
+### 方式二：免安装版（全平台）
+
+下载对应平台的压缩包，解压到任意**可写**目录后：
 
 - Windows：双击 `dsh-pet.exe`
 - macOS：双击 `dsh-pet.app`
 - Linux：运行 `./dsh-pet`
 
+**数据就在解压目录下的 `data/`**：整个目录拷走即迁移，删掉即卸载干净。
+
 宠物出现在屏幕右上角，托盘图标里可以打开设置、重载配置、退出。
 
-### 方式二：从源码运行
+### 方式三：从源码运行
 
 ```sh
 git clone git@github.com:luoqingciya/dsh-pet.git
@@ -43,12 +53,16 @@ npm run app
 ```
 
 首次启动会自动下载一份 Electron 到 `~/.dsh/electron`（约 200MB，只下一次）。
-`npm run app` 会先构建再启动，改完代码重跑即可。
+`npm run app` 会先构建再启动，改完代码重跑即可。源码态的数据放在 Electron 的用户目录
+（`%APPDATA%\dsh-pet`），与打包版互不干扰。
 
-### 方式三：双击启动脚本
+### 方式四：双击启动脚本
 
 Windows 直接双击仓库里的 `dsh-pet.cmd`；macOS / Linux 运行 `./dsh-pet.sh`。
 首次会自动装依赖并构建。
+
+> **端口**：本地服务默认监听 `127.0.0.1:7340`（与 DeepSeek Harness 的 3080 错开）。
+> 被占用会自动顺延；要固定别的端口用 `dsh-pet --port <端口>` 或环境变量 `DSH_PET_APP_PORT`。
 
 ---
 
@@ -72,7 +86,7 @@ Windows 直接双击仓库里的 `dsh-pet.cmd`；macOS / Linux 运行 `./dsh-pet
 
 ## 设置
 
-托盘图标 →「打开设置」，或浏览器打开 <http://127.0.0.1:3080/app/>。
+托盘图标 →「打开设置」，或浏览器打开 <http://127.0.0.1:7340/app/>。
 
 ### 桌宠
 
@@ -86,14 +100,19 @@ Windows 直接双击仓库里的 `dsh-pet.cmd`；macOS / Linux 运行 `./dsh-pet
 
 | 项 | 说明 |
 | --- | --- |
-| 服务商 | DeepSeek 官方 / Ollama（本机）/ 自定义（OpenAI 兼容） |
-| 模型 | 如 `deepseek-chat`、`qwen2.5:7b`；留空则从端点的 `/models` 自动拉取 |
+| 服务商 | DeepSeek 官方 / Ollama（本机）/ OpenAI / 阿里云百炼（通义千问）/ 自定义（OpenAI 兼容） |
+| 模型 | 如 `deepseek-flash`、`deepseek-v4-pro`、`qwen-plus`、`qwen2.5:7b`；留空则从端点的 `/models` 自动拉取 |
 | 接口地址 | OpenAI 兼容根地址（不带 `/chat/completions`） |
 | API Key | 存在本机 `secrets.json`（权限 0600），只写不读、不回显 |
 | 余额服务商 | 默认跟随模型服务商，也可单独指定（对话走 Ollama、余额查 DeepSeek） |
 | 通知 | 对话回复 / 余额告急 |
 
 点「测试连通」可直接验证端点 + 密钥 + 模型是否可用，失败会把服务端返回的原文带出来。
+
+> **关于模型名**：2026-07-24 起 DeepSeek 停用了 `deepseek-chat` / `deepseek-reasoner`，
+> 现行模型是 `deepseek-flash` 与 `deepseek-v4-pro`，预设已经跟上。其余服务商的模型清单
+> 默认留空、由端点的 `/models` 现拉——比在代码里硬编码一串会过期的名字可靠。
+> DeepSeek 预设会显式关闭「思考模式」（V4 默认开启）：桌宠只要一句话，开着会白等几秒推理。
 
 > 人设（碎碎念与对话共用的 system 提示词）在配置文件的 `whisperPrompt` 字段里，默认已经写好；
 > 想换语气直接改那一行。
@@ -164,7 +183,7 @@ Windows 直接双击仓库里的 `dsh-pet.cmd`；macOS / Linux 运行 `./dsh-pet
 
 ## 对外 HTTP 接口
 
-桌宠不只是个摆设：它把全部能力挂在 `http://127.0.0.1:3080/dsh-pet-7340`（只监听本机、无鉴权），
+桌宠不只是个摆设：它把全部能力挂在 `http://127.0.0.1:7340/dsh-pet-7340`（只监听本机、无鉴权），
 别的脚本可以让它说话、点播动画、读它的状态。
 
 - 一览：[`API.md`](API.md)
@@ -177,7 +196,7 @@ Windows 直接双击仓库里的 `dsh-pet.cmd`；macOS / Linux 运行 `./dsh-pet
 
 ```
 dsh-pet.exe（Electron 主进程）
- ├─ 本地服务 127.0.0.1:3080
+ ├─ 本地服务 127.0.0.1:7340
  │   ├─ /dsh-pet-7340/*   宿主半边：配置合并 / 状态仓 / 素材 / 余额 / 对话（src/host）
  │   └─ /app/*            设置页与本地服务接口（src/app/web-ui.ts）
  ├─ 宿主上下文（src/app/context.ts）
@@ -195,22 +214,29 @@ dsh-pet.exe（Electron 主进程）
 
 ## 数据目录
 
-| 平台 | 目录 |
+**打包版：数据跟着程序走。**
+
+| 形态 | 数据目录 |
 | --- | --- |
-| Windows | `%APPDATA%\dsh-pet\` |
-| macOS | `~/Library/Application Support/dsh-pet/` |
-| Linux | `~/.config/dsh-pet/` |
+| 安装版（Windows） | `<安装目录>\data\`（默认 `%LOCALAPPDATA%\Programs\dsh-pet\data\`） |
+| 免安装版 | `<解压目录>\data\` |
+| 源码运行 | `%APPDATA%\dsh-pet\`（macOS `~/Library/Application Support/dsh-pet`） |
 
 ```
-<数据目录>/dsh-pet/
-├─ main-config.jsonc   桌宠配置（大小 / 位置 / 动画池 / 权重 / 物理 / 字体 / 人设）
-├─ app-config.json     本地服务配置（服务商 / 模型 / 端点 / 通知开关）
-├─ secrets.json        API Key（0600）
-├─ memory.json         对话记忆
-├─ app.log             运行日志（排障时先看它）
-├─ main-animation/     自定义动画
-└─ pet/                额外宠物种类
+<数据目录>/
+├─ electron/           Electron 自己的缓存（Chromium profile，可随时删）
+└─ dsh-pet/
+   ├─ main-config.jsonc   桌宠配置（大小 / 位置 / 动画池 / 权重 / 物理 / 字体 / 人设）
+   ├─ app-config.json     本地服务配置（服务商 / 模型 / 端点 / 通知开关）
+   ├─ secrets.json        API Key（0600）
+   ├─ memory.json         对话记忆
+   ├─ app.log             运行日志（排障时先看它）
+   ├─ main-animation/     自定义动画
+   └─ pet/                额外宠物种类
 ```
+
+免安装版请解压到**可写**目录（用户目录、D 盘任意文件夹都行）。若放在只读位置（如
+`Program Files`），应用会自动回落到用户目录启动，并在日志里说明。
 
 首次启动会自动接管 `~/.dsh/dsh-pet/`（旧版本的数据），只在新目录不存在时做一次。
 
@@ -224,7 +250,8 @@ dsh-pet.exe（Electron 主进程）
 | 碎碎念/对话报「缺少 API Key」 | 「本地服务」填对应密钥，或把服务商切到不需要密钥的本机 Ollama |
 | 报「模型接口返回 HTTP 401」 | 密钥与端点不匹配（DeepSeek 的 key 不能用于自定义端点） |
 | 余额只弹一句文字说明 | 该服务商没有余额接口或缺密钥；气泡第二行会给出 provider id 与原因 |
-| 端口 3080 被占用 | `dsh-pet --port 3100`（或 `npm run app -- --port 3100`），或设 `DSH_PET_APP_PORT=3100` |
+| 端口 7340 被占用 | 会自动顺延；要固定用 `dsh-pet --port 7500`（或 `npm run app -- --port 7500`），或设 `DSH_PET_APP_PORT=7500` |
+| 装到 Program Files 后数据不在安装目录 | 那里对普通用户不可写，应用自动回落到用户目录；改用默认的 per-user 安装位置即可 |
 | 想看详细日志 | `DSH_PET_APP_DEBUG=1 npm run app`，或直接看 `app.log` |
 
 ---
@@ -248,15 +275,16 @@ dsh-pet.exe（Electron 主进程）
 ## 构建与发布
 
 ```sh
-npm run build          # 构建 lib（主进程 / 启动器 / 设置页 + 桌面共享核心）
-npm run app            # 构建并启动
-npm run app:package    # 打便携版到 dist/dsh-pet-app/
-npm run app:smoke      # 端到端冒烟（需要应用已在运行）
-npm test               # 单元测试
+npm run build           # 构建 lib（主进程 / 启动器 / 设置页 + 桌面共享核心）
+npm run app             # 构建并启动
+npm run app:package     # 免安装 zip 的内容目录：dist/dsh-pet-app/
+npm run app:installer   # Windows 安装包（NSIS）：dist/installer/dsh-pet-setup-<版本>.exe
+npm run app:smoke       # 端到端冒烟（需要应用已在运行）
+npm test                # 单元测试
 ```
 
-CI（`.github/workflows/build.yml`）在 Windows / macOS / Linux 上分别构建并上传便携版产物；
-推 `v*` 标签时自动创建 Release 并附上三平台压缩包。
+CI（`.github/workflows/build.yml`）在 Windows / macOS / Linux 上构建免安装版并上传；
+Windows 额外产出安装包。推 `v*` 标签时自动创建 Release，附上三平台 zip 与 Windows 安装包。
 
 ---
 

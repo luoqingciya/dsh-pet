@@ -107,9 +107,13 @@ declare module 'electron' {
   };
 
   interface App {
+    /** 是否运行在打包后的应用里（`false` = 开发态 `electron lib/app-main.cjs`） */
+    readonly isPackaged: boolean;
     setName(name: string): void;
     getName(): string;
     getPath(name: string): string;
+    /** 覆盖 Electron 的路径（必须在 ready 之前调用）：本地应用用它把 profile 收进数据目录 */
+    setPath(name: string, path: string): void;
     getVersion(): string;
     requestSingleInstanceLock(): boolean;
     whenReady(): Promise<void>;

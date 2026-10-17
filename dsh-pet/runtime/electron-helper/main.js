@@ -258,7 +258,6 @@ const BRIDGE = process.env.DSH_PET_BRIDGE === '1';
 /** 「打开网站」这一项的去向（宿主按自身形态注入）：
  *  'desktop' = 宿主是 DSH 桌面应用 → 唤起桌面应用主窗口；
  *  'site'    = dsh web / 独立模式 / 手写 start-desktop（无该变量）→ 原行为：默认浏览器打开站点。 */
-const OPEN_TARGET = process.env.DSH_PET_OPEN_TARGET === 'desktop' ? 'desktop' : 'site';
 /** 协议行前缀（与 helper-process.ts 的 BRIDGE_PREFIX 一致） */
 const BRIDGE_PREFIX = 'dsh-pet-bridge:';
 
@@ -401,7 +400,7 @@ function deskGeometry() {
 function createPetWindows() {
   const geo = deskGeometry();
   const area = geo.hull;
-  const configUrl = process.env.DSH_PET_CONFIG_URL || 'http://127.0.0.1:3080/dsh-pet-7340/config';
+  const configUrl = process.env.DSH_PET_CONFIG_URL || 'http://127.0.0.1:7340/dsh-pet-7340/config';
   const pets = petsFromEnv();
   const scale = petScale();
   for (const pet of pets) {
@@ -520,7 +519,6 @@ function createPetWindows() {
           configUrl,
           bridge: BRIDGE ? '1' : '0',
           // 工具项「打开网站」的文案按宿主形态自动变（见 sprite.js）：desktop=唤起桌面应用 / site=打开站点
-          openTarget: OPEN_TARGET,
           scale: String(scale),
           petIndex: String(pet.index),
           workAreaW: String(area.width),
@@ -815,23 +813,10 @@ app.whenReady().then(() => {
     });
   };
 
-  // 去向由宿主形态决定（OPEN_TARGET，宿主按自身形态注入）：
-  //   desktop（宿主 = DSH 桌面应用）→ 用应用自注册的 dsh:// 协议把主窗口叫回前台：已运行则第二个实例
-  //     被单实例锁拦下、宿主收到 second-instance 后 focusPrimaryWindow()；未运行则协议直接把应用拉起来。
-  //     比 spawn 宿主 exe 干净——不必处理 ELECTRON_RUN_AS_NODE（spawn 继承它就成了 node 模式，起不了界面）
-  //     与安装路径探测。
-  //   site（dsh web / 独立模式）→ 原行为：系统默认浏览器打开站点。
+  // 右键「打开设置」：系统默认浏览器打开本地服务的设置页（同源，直接可用）。
   ipcMain.on('pet:open-site', (event, payload) => {
     const url = payload && typeof payload === 'object' ? String(payload.url || '') : '';
     if (!/^https?:[/][/]/.test(url)) return;
-    if (OPEN_TARGET === 'desktop') {
-      // 协议未注册（绿色版 / 注册表被清）时回落成打开站点，至少不是"点了没反应"
-      shell.openExternal('dsh://open').catch((error) => {
-        console.error('[dsh-pet-desktop-helper] open dsh:// failed, falling back to site:', error);
-        openSite(url);
-      });
-      return;
-    }
     openSite(url);
   });
 

@@ -19,7 +19,7 @@
  */
 import { createServer } from 'node:http';
 
-const APP = process.env.DSH_PET_APP_URL || 'http://127.0.0.1:3080';
+const APP = process.env.DSH_PET_APP_URL || 'http://127.0.0.1:7340';
 const MOCK_PORT = Number(process.env.DSH_PET_SMOKE_MOCK_PORT || 18099);
 
 const checks = [];

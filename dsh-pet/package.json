@@ -1,6 +1,6 @@
 {
   "name": "dsh-pet",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "一只住在桌面上的透明动画桌宠：一百余段手绘风动画、拖拽甩抛、多开漫游，还能查余额、碎碎念、陪你聊天。不依赖任何 Agent 框架，双击即用。",
   "keywords": [
     "desktop-pet",
@@ -69,7 +69,8 @@
     "test:ui": "node --test scripts/tests/*.test.mjs",
     "app": "npm run bundle && npm run build:desktop-core && node lib/app-launch.js",
     "app:package": "node scripts/package-app.mjs",
-    "app:smoke": "node scripts/app-smoke.mjs"
+    "app:smoke": "node scripts/app-smoke.mjs",
+    "app:installer": "node scripts/package-installer.mjs"
   },
   "license": "MIT",
   "engines": {
@@ -84,6 +85,7 @@
     "@types/node": "^26.2.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
+    "electron-builder": "^26.15.3",
     "eslint": "^10.9.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "js-yaml": "^5.4.2",
@@ -95,5 +97,8 @@
     "tsdown": "^0.8.0",
     "typescript": "^5.5.0",
     "typescript-eslint": "^8.67.0"
+  },
+  "author": {
+    "name": "luoqingciya"
   }
 }

@@ -34,7 +34,7 @@ export interface AppLogger {
 }
 
 /** 默认端口（与桌面 Helper 的内置默认一致） */
-export const DEFAULT_PORT = 3080;
+export const DEFAULT_PORT = 7340;
 /** 端口被占用时向后顺延的个数上限 */
 export const PORT_SCAN_LIMIT = 25;
 

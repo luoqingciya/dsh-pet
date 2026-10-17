@@ -63,6 +63,14 @@ jobs:
         env:
           DSH_PET_ELECTRON_DIR: ${{ github.workspace }}/dsh-pet/node_modules/electron/dist
         run: node scripts/package-app.mjs
+      # Windows 额外产一个安装版（NSIS，per-user 安装，数据同样落在安装目录）
+      - name: Installer (Windows only)
+        if: runner.os == 'Windows'
+        env:
+          DSH_PET_ELECTRON_DIR: ${{ github.workspace }}/dsh-pet/node_modules/electron/dist
+          # Runner 在 GitHub 网络内，直接走官方源（脚本默认的 npmmirror 是给国内本地构建用的）
+          ELECTRON_BUILDER_BINARIES_MIRROR: https://github.com/electron-userland/electron-builder-binaries/releases/download/
+        run: npm run app:installer
       - name: Archive (Windows)
         if: runner.os == 'Windows'
         run: Compress-Archive -Path dist/dsh-pet-app/* -DestinationPath dist/dsh-pet-${{ matrix.suffix }}.zip
@@ -73,6 +81,13 @@ jobs:
         with:
           name: dsh-pet-${{ matrix.suffix }}
           path: dsh-pet/dist/dsh-pet-*.zip
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Windows'
+        with:
+          name: dsh-pet-installer
+          path: dsh-pet/dist/installer/*.exe
           if-no-files-found: error
           retention-days: 14
 
@@ -90,6 +105,8 @@ jobs:
           merge-multiple: true
       - uses: softprops/action-gh-release@v2
         with:
-          files: dist/dsh-pet-*.zip
+          files: |
+            dist/dsh-pet-*.zip
+            dist/*.exe
           generate_release_notes: true
           draft: false

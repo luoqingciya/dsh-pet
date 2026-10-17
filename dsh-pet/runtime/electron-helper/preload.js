@@ -48,7 +48,7 @@ contextBridge.exposeInMainWorld('petBridge', {
   setInputRegions(input) {
     ipcRenderer.send('pet:input-regions', input);
   },
-  // 右键菜单「打开网站」：主进程按宿主形态打开——桌面应用宿主唤起桌面窗口（dsh://open），否则系统默认浏览器打开 DSH 网站（等效网页 Ctrl+点击链接）
+  // 右键菜单「打开设置」：主进程用系统默认浏览器打开本地服务的设置页
   openDshSite(url) {
     ipcRenderer.send('pet:open-site', { url });
   },

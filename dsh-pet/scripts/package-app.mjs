@@ -106,9 +106,6 @@ function main() {
     const from = join(ROOT, rel);
     if (existsSync(from)) cpSync(from, join(appDir, rel));
   }
-  // 角色分发入口（纯 CJS 源码，原样拷贝；见该文件头：便携版里 Helper 与应用共用同一个 exe）
-  mkdirSync(join(appDir, 'lib'), { recursive: true });
-  cpSync(join(ROOT, 'src', 'app', 'entry.cjs'), join(appDir, 'lib', 'app-entry.cjs'));
 
   // 4) 精简 package.json：只留 Electron 启动所需字段（main 指向 CJS 主进程）
   const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
@@ -143,14 +140,13 @@ function main() {
           ? '双击 Electron.app（可自行改名为 dsh-pet.app）启动。'
           : '运行 ./dsh-pet 启动。',
       '',
-      '数据目录：',
-      PLAT === 'win32'
-        ? '  %APPDATA%\\dsh-pet'
-        : PLAT === 'darwin'
-          ? '  ~/Library/Application Support/dsh-pet'
-          : '  ~/.config/dsh-pet',
+      '数据目录（就在本目录下，拷走即迁移）：',
+      '  data/',
       '',
-      '设置页也可在浏览器打开：http://127.0.0.1:3080/app/',
+      '本目录需要对当前用户可写。若放在只读位置（如 Program Files），',
+      '应用会自动回落到用户目录启动，并在日志里说明。',
+      '',
+      '设置页也可在浏览器打开：http://127.0.0.1:7340/app/',
       '',
     ].join('\n'),
     'utf8',

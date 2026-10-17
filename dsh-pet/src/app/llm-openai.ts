@@ -88,7 +88,7 @@ export function createLlmService(deps: { config: () => AppConfig; secrets?: () =
   const secretsOf = (): SecretMap => (deps.secrets ? deps.secrets() : readSecrets());
 
   /** 解析出本次调用要用的端点与密钥 */
-  const resolveEndpoint = (provider: string): { baseUrl: string; key: string; name: string } => {
+  const resolveEndpoint = (provider: string): { baseUrl: string; key: string; name: string; thinking?: 'off' } => {
     const config = deps.config();
     const endpoint = endpointOf(config, provider);
     if (!endpoint) {
@@ -101,7 +101,7 @@ export function createLlmService(deps: { config: () => AppConfig; secrets?: () =
     if (endpoint.apiKeyRef && !key) {
       throw new Error(`缺少 API Key：${endpoint.apiKeyRef}（设置页「本地服务」里填写）`);
     }
-    return { baseUrl: trimBase(endpoint.baseUrl), key, name: endpoint.name };
+    return { baseUrl: trimBase(endpoint.baseUrl), key, name: endpoint.name, thinking: endpoint.thinking };
   };
 
   return {
@@ -168,7 +168,7 @@ export function createLlmService(deps: { config: () => AppConfig; secrets?: () =
 
           /** 发起请求（首次 next() 时才做，符合"错误在 next 时抛出"的契约） */
           const start = async (): Promise<void> => {
-            const { baseUrl, key } = resolveEndpoint(provider);
+            const { baseUrl, key, thinking } = resolveEndpoint(provider);
             if (!model) throw new Error('未选择模型（设置页「本地服务」）');
             const res = await fetch(baseUrl + '/chat/completions', {
               method: 'POST',
@@ -180,6 +180,9 @@ export function createLlmService(deps: { config: () => AppConfig; secrets?: () =
                 model,
                 messages,
                 stream: true,
+                // 端点声明了「关思考」才带这个字段（DeepSeek V4 默认开思考，桌宠只要一句话，
+                // 开着会白等几秒推理、多花推理 token）。未声明的端点一律不发，避免严格实现 400。
+                ...(thinking === 'off' ? { thinking: { type: 'disabled' } } : {}),
                 ...(temperature === undefined ? {} : { temperature }),
                 ...(maxTokens === undefined ? {} : { max_tokens: maxTokens }),
               }),
