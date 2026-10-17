@@ -86,17 +86,21 @@ jobs:
         run: npm run app:installer
       # 两个平台都打成「一个 dsh-pet/ 目录」：Windows 的 Compress-Archive 传 `*` 会把 20 个文件
       # 摊在压缩包根目录，解压后散一地；和 mac/linux 的包结构也不一致。
+      #
+      # 用 **改名而不是复制**：macOS 的 Electron.app 里全是符号链接（Framework 的 Versions/Current
+      # 等），`cp -r` 会把它们解引用成真实文件——实测 zip 从 184MB 涨到 403MB。改名不动内容，
+      # 链接原样保留，zip -y 才能正确存成链接。
       - name: Archive (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          Copy-Item -Recurse -Force dist/dsh-pet-app dist/dsh-pet
+          Rename-Item -Path dist/dsh-pet-app -NewName dsh-pet
           Compress-Archive -Path dist/dsh-pet -DestinationPath dist/dsh-pet-${{ steps.ver.outputs.v }}-${{ matrix.suffix }}.zip
       - name: Archive (macOS / Linux)
         if: runner.os != 'Windows'
         run: |
           cd dist
-          cp -r dsh-pet-app dsh-pet
+          mv dsh-pet-app dsh-pet
           zip -qry dsh-pet-${{ steps.ver.outputs.v }}-${{ matrix.suffix }}.zip dsh-pet
       - uses: actions/upload-artifact@v4
         with:
