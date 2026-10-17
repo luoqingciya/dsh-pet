@@ -70,6 +70,11 @@ const args = [
   'nsis',
   '--config',
   'electron-builder.yml',
+  // 只构建、不发布：CI 里 electron-builder 检测到 CI 环境会**自动尝试上传 Release**，
+  // 没有 GH_TOKEN 就整个任务失败（本地不会触发，很难提前发现）。发布由工作流自己的
+  // release job 负责（把产物挂到 tag 的 Release）。
+  '--publish',
+  'never',
   `-c.electronDist=${electron}`,
   `-c.electronVersion=${process.env.DSH_PET_ELECTRON_VERSION || '43.3.0'}`,
 ];
