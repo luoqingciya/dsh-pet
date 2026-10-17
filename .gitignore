@@ -39,6 +39,9 @@ temp/
 dsh-pet/lib/
 dsh-pet/runtime/electron-helper/shared-core.js
 
+# ── 便携版应用输出（npm run app:package 产出，约 400MB，不入库）──
+dsh-pet/dist/
+
 # ── IDE / 编辑器 ──
 .idea/
 .vscode/

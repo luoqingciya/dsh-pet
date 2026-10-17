@@ -8,7 +8,7 @@ import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
 
 export default tseslint.config(
-  { ignores: ['lib/**', 'scripts/**', 'assets/**', 'runtime/**', 'node_modules/**'] },
+  { ignores: ['lib/**', 'dist/**', 'scripts/**', 'assets/**', 'runtime/**', 'node_modules/**'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
@@ -22,6 +22,15 @@ export default tseslint.config(
     // client 半侧是 React 代码（hooks + 手写 h() 元素）：
     // rules-of-hooks 强制 hook 调用顺序稳定；exhaustive-deps 提醒 useEffect 依赖遗漏
     files: ['src/client/**/*.ts'],
+    plugins: { 'react-hooks': reactHooks },
+    rules: {
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn',
+    },
+  },
+  {
+    // 本地应用设置页（React 组件，浏览器 bundle）：同一套 hooks 规则
+    files: ['src/app/page/**/*.tsx'],
     plugins: { 'react-hooks': reactHooks },
     rules: {
       'react-hooks/rules-of-hooks': 'error',

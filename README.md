@@ -26,6 +26,32 @@ AI 生成动画的配方     源视频 → 透明动画的管线    运行在 DS
 
 ---
 
+## 🖥️ 本地应用（不装 DSH）
+
+不想装 DeepSeek Harness，也想让它待在桌面上？这个仓库现在也能直接当**桌面应用**跑：
+
+```sh
+cd dsh-pet
+npm install
+npm run app            # 本地服务 + 桌面宠物 + 设置窗（托盘常驻）
+npm run app:package    # 可选：打便携版 dist/dsh-pet-app/dsh-pet.exe（免 Node，解压即用）
+```
+
+- **双击即用**：Windows 可直接双击仓库根的 `dsh-pet.cmd`（首次自动装依赖并构建）；便携版解压后双击 `dsh-pet.exe`
+- **功能不缩水**：动画链、点击/拖拽/甩抛、多开、屏幕漫游、pet pack、设置页全部保留
+- **原本依赖 DSH 的能力改为本地实现**：
+  - 余额：本地密钥直连（DeepSeek 官方 / OpenCode Zen Go / Command Code）
+  - 碎碎念与对话：直连 OpenAI 兼容端点（默认 DeepSeek，可指 Ollama 或任意兼容服务）
+  - 系统通知：本机原生通知（对话回复完成 / 余额告急）
+  - 工作状态：跟随本地对话生成（思考 → 成功 / 出错）
+- **设置**：托盘 → 打开设置，或浏览器打开 `http://127.0.0.1:3080/app/`
+- **数据**：`%APPDATA%\dsh-pet`（macOS `~/Library/Application Support/dsh-pet`），首次启动自动接管 `~/.dsh/dsh-pet/` 的旧配置与素材
+- 架构、能力边界与排障：[`dsh-pet/APP.md`](dsh-pet/APP.md)
+
+> 插件形态没有被删除：`src/host` / `src/client` 仍是插件本体，`dsh plugin add` 照常可用。本地应用只是给同一份源码换了一个宿主。
+
+---
+
 ## 快速开始（安装插件）
 
 装法取决于你在用哪个 DSH：
@@ -554,8 +580,12 @@ npm publish --tag latest   # prepack 自动执行构建（完整产物 + 收敛 
 ├── tools/             # 开发小工具（素材链各阶段预览等）
 ├── assets/            # 仓库展示用截图
 ├── .github/workflows/ # CI：Safari/HEVC 转码流水线（macOS runner，手动触发 → 发布 assets-mov Release）
-├── dsh-pet/           # ③ 插件（可独立 npm 发布）
-│   ├── src/           #   TS 源码：host（配置/路由/工作状态）、client（动画链）、shared（双端共用纯逻辑）
+├── dsh-pet/           # ③ 插件（可独立 npm 发布；同时是本地应用的包根）
+│   ├── src/           #   TS 源码：host（配置/路由/工作状态）、client（动画链）、shared（双端共用纯逻辑）、
+│   │                  #            app（本地应用：宿主上下文 / OpenAI 兼容 LLM / 设置页 / 托盘）
+│   ├── APP.md         #   本地应用说明（不装 DSH 直接跑、能力边界与排障）
+│   ├── dsh-pet.cmd    #   双击启动（Windows）
+│   ├── dsh-pet.sh     #   双击启动（macOS / Linux）
 │   ├── lib/           #   构建产物（npm run build 生成，不入库）
 │   ├── runtime/       #   桌面模式运行壳（Electron 透明窗）
 │   ├── assets/        #   webm 动画 / preview GIF / 字体 / 图标 / config.jsonc 默认配置

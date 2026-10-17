@@ -32,6 +32,12 @@ export interface StandaloneServerOptions {
   status?: () => unknown;
   /** `/shutdown` 被请求时通知调用方收尾（独立模式的脚本化停机） */
   onShutdown?: () => void;
+  /**
+   * 额外路由兜底（本地应用用：设置页静态资源、本地服务配置接口）。
+   * 在插件路由表**之前**尝试，返回 true 表示已处理（此时不要再写响应）。
+   * 独立模式不传 = 行为与改造前完全一致。
+   */
+  extra?: (req: IncomingMessage, res: ServerResponse, pathname: string) => boolean | Promise<boolean>;
 }
 
 export interface StandaloneServer {
@@ -96,7 +102,7 @@ function fail(res: ServerResponse, error: unknown, logger: StandaloneLogger): vo
 export function createRequestListener(
   options: StandaloneServerOptions,
 ): (req: IncomingMessage, res: ServerResponse) => void {
-  const { routes, logger, status, onShutdown } = options;
+  const { routes, logger, status, onShutdown, extra } = options;
   return (req, res) => {
     const method = req.method ?? 'GET';
     const pathname = pathnameOf(req.url);
@@ -107,30 +113,51 @@ export function createRequestListener(
       res.end();
       return;
     }
-    if (pathname === '/' || pathname === '/health') {
-      sendJson(res, 200, status?.() ?? { name: 'dsh-pet-standalone' });
+    // 额外路由优先（本地应用的设置页 / 本地服务接口）；抛错同样收口成 500，不静默
+    if (extra) {
+      const run = (): void => {
+        try {
+          void Promise.resolve(extra(req, res, pathname))
+            .then((handled) => {
+              if (!handled) fallThrough();
+            })
+            .catch((error: unknown) => fail(res, error, logger));
+        } catch (error) {
+          fail(res, error, logger);
+        }
+      };
+      run();
       return;
     }
-    if (pathname === '/shutdown') {
-      // 先回话再收尾：调用方要能拿到 200，而不是被自己的停机动作打断
-      sendJson(res, 200, { ok: true, stopping: true });
-      queueMicrotask(() => onShutdown?.());
-      return;
-    }
+    fallThrough();
 
-    const route = routes.find((candidate) => matches(candidate, pathname));
-    if (route === undefined) {
-      sendText(
-        res,
-        404,
-        `dsh-pet-standalone: 没有匹配的路由（已注册：${routes.map((item) => item.path).join(', ') || '无'}）`,
-      );
-      return;
-    }
-    try {
-      void Promise.resolve(route.handler(req, res)).catch((error: unknown) => fail(res, error, logger));
-    } catch (error) {
-      fail(res, error, logger);
+    /** 额外路由没接：走插件路由表与内置运维端点 */
+    function fallThrough(): void {
+      if (pathname === '/' || pathname === '/health') {
+        sendJson(res, 200, status?.() ?? { name: 'dsh-pet-standalone' });
+        return;
+      }
+      if (pathname === '/shutdown') {
+        // 先回话再收尾：调用方要能拿到 200，而不是被自己的停机动作打断
+        sendJson(res, 200, { ok: true, stopping: true });
+        queueMicrotask(() => onShutdown?.());
+        return;
+      }
+
+      const route = routes.find((candidate) => matches(candidate, pathname));
+      if (route === undefined) {
+        sendText(
+          res,
+          404,
+          `dsh-pet-standalone: 没有匹配的路由（已注册：${routes.map((item) => item.path).join(', ') || '无'}）`,
+        );
+        return;
+      }
+      try {
+        void Promise.resolve(route.handler(req, res)).catch((error: unknown) => fail(res, error, logger));
+      } catch (error) {
+        fail(res, error, logger);
+      }
     }
   };
 }

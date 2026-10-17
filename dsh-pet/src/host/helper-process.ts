@@ -278,7 +278,16 @@ export const HELPER_STOP_GRACE_MS = 1000;
  * 都进纯 Node 模式。运行期再 `delete process.env` 已经晚了（模块加载器在进程启动瞬间就定了）。
  */
 export function helperSpawnEnv(hostPid: number, extra?: Record<string, string | undefined>): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env, DSH_PET_HOST_PID: String(hostPid), ...extra };
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    DSH_PET_HOST_PID: String(hostPid),
+    // 角色标记：**便携版应用**里宿主与 Helper 共用同一个可执行文件（`dsh-pet.exe`），
+    // 而打包后的 Electron 会忽略命令行里的脚本路径、一律加载 `resources/app`。
+    // 因此靠这个变量让 `lib/app-entry.cjs` 分发：helper → 跑透明小窗，缺省 → 跑应用主进程。
+    // 开发态（electron.exe + 脚本路径）Electron 直接执行脚本，这个变量不参与判定，无副作用。
+    DSH_PET_ROLE: 'helper',
+    ...extra,
+  };
   delete env.ELECTRON_RUN_AS_NODE;
   return env;
 }

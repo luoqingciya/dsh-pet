@@ -36,6 +36,8 @@
     "scripts.build —— 构建完整产物 + files 收敛（node scripts/prepare.js）。克隆后手动跑一次；npm publish / npm pack 由 prepack 自动调用",
     "scripts.prepack —— 发布前链：build（构建）→ typecheck/lint/format → prepack-check（素材健康检查）→ check:openapi。构建只挂这里：npm 11 会把 prepare 判为未批准的安装脚本，而 scripts/prepare.js 不随包发布（files 白名单只留 ensure-electron.mjs），用户一旦按提示批准就必然 ENOENT 失败",
     "bin.dsh-pet-standalone —— 独立模式 CLI（构建产物 lib/standalone.js）：不打开 DSH 直接跑桌宠，把插件的宿主半边跑在伪 ctx 上；tsdown 的第二个入口负责构建，源码见 src/standalone/",
+    "bin.dsh-pet-app —— 本地应用启动器（构建产物 lib/app-launch.js）：不打开 DSH 直接跑桌宠，但宿主半边跑在**真实**服务上（本地密钥 / OpenAI 兼容模型 / 原生通知），并带托盘与设置窗；源码见 src/app/",
+    "scripts.app / app:package / app:smoke —— 本地应用的运行、便携版打包（dist/，免 Node）与端到端冒烟检查",
     "peerDependencies —— 运行时由宿主（DSH）提供的模块，本包不打包它们",
     "engines —— Node.js 兼容下限（由运行依赖 @electron/get@5.1.0 的 engines 决定）",
     "================================================"
@@ -43,7 +45,8 @@
   "type": "module",
   "main": "lib/index.js",
   "bin": {
-    "dsh-pet-standalone": "lib/standalone.js"
+    "dsh-pet-standalone": "lib/standalone.js",
+    "dsh-pet-app": "lib/app-launch.js"
   },
   "exports": {
     ".": {
@@ -88,7 +91,10 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test:ui": "node --test scripts/tests/*.test.mjs"
+    "test:ui": "node --test scripts/tests/*.test.mjs",
+    "app": "npm run bundle && npm run build:desktop-core && node lib/app-launch.js",
+    "app:package": "node scripts/package-app.mjs",
+    "app:smoke": "node scripts/app-smoke.mjs"
   },
   "license": "MIT",
   "engines": {

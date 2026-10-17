@@ -611,8 +611,13 @@ export function apply(ctx: any): void {
     const mark = <T>(v: T): T | (T & { manual: true }) => (manual ? { ...v, manual: true } : v);
     try {
       const sel = ctx.agentDefaultModel.currentSelection();
+      // 余额服务商：默认跟随当前对话的模型（DSH 内行为不变）。本地应用（无 DSH）允许
+      // 「对话用 A、余额查 B」——宿主若提供 petBalanceProvider 能力就优先用它，空串回落 sel.provider。
+      const petBalanceProvider = (ctx as { petBalanceProvider?: () => unknown }).petBalanceProvider;
+      const balanceProviderId =
+        typeof petBalanceProvider === 'function' ? String(petBalanceProvider() || sel.provider) : sel.provider;
       const result = await queryBalance(
-        sel.provider,
+        balanceProviderId,
         async (ref) => {
           const rc = await ctx.credentials.resolve(credentialRef(ref));
           return rc?.value;

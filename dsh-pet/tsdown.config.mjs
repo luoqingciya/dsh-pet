@@ -3,7 +3,7 @@
 //       window.__ModuleLoader__.load({ id, factory }) 单文件形态；
 //       react / react/jsx-runtime / @deepseek-ai/* 保持外部 require（不打包）。
 //
-// 三份配置：
+// 六份配置：
 //   1) 浏览器半侧（client → lib/client.js）—— 与 DSH 内运行一致，@deepseek-ai/* 全部
 //      外部化（那些包由 DSH 宿主提供）；产物额外包一层 IIFE，理由见该份配置里的注释。
 //   2) 宿主半侧（index → lib/index.js）—— 保持 ESM，由 DSH 的 Loader import。
@@ -13,6 +13,10 @@
 //      因此用 alias 把它们换成本地替身（src/standalone/shims/*）：替身只做
 //      "转调插件自己的同口径实现" 或 "明确降级"，没有任何生成/网络逻辑（细节见各文件头）。
 //      其余 @deepseek-ai/* 仍按外部处理（负向断言），避免哪天误把 DSH 代码打进产物。
+//   4) 本地应用主进程（app-main → lib/app-main.cjs）—— Electron main，**CJS**（ESM 主进程里
+//      `import 'electron'` 会解析到 npm 包而不是运行时）；DSH 服务换成 src/app 的本地实现。
+//   5) 本地应用启动器（app-launch → lib/app-launch.js）—— Node 跑，找 Electron 再拉起主进程。
+//   6) 本地应用设置页（app-settings → lib/app-settings.js）—— 浏览器 IIFE，react 打进产物。
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'tsdown';
@@ -79,5 +83,56 @@ export default defineConfig([
       '@deepseek-ai/dsh-credentials': shim('dsh-credentials'),
       '@deepseek-ai/dsh-llm': shim('dsh-llm'),
     },
+  },
+
+  // ---------- 本地应用（不依赖 DSH，可双击启动）----------
+  {
+    // 4) 应用主进程（Electron main）。**必须是 CJS**：Electron 43 的 ESM 主进程里
+    //    `import 'electron'` 会被 Node 解析器判给 node_modules/electron（导出的是路径字符串），
+    //    拿不到 app/BrowserWindow；`require('electron')` 才是运行时模块。
+    ...shared,
+    format: ['cjs'],
+    target: 'es2022',
+    entry: { 'app-main': 'src/app/main.ts' },
+    // `@electron/get` **不能外部化**：便携包里没有 node_modules，裸 require 会在启动瞬间
+    // ERR_MODULE_NOT_FOUND（表现为一个什么都看不到的 "Error" 弹框）。它由下面的 alias 换成替身。
+    noExternal: [/^@deepseek-ai\/(?:dsh-home-paths|dsh-credentials|dsh-llm)$/, '@electron/get'],
+    external: [
+      /^electron$/,
+      /^@electron\/(?!get$)/,
+      /^node:/,
+      /^@deepseek-ai\/(?!dsh-home-paths$|dsh-credentials$|dsh-llm$)/,
+    ],
+    alias: {
+      '@deepseek-ai/dsh-home-paths': shim('dsh-home-paths'),
+      '@deepseek-ai/dsh-credentials': shim('dsh-credentials'),
+      '@deepseek-ai/dsh-llm': shim('dsh-llm'),
+      // 本地应用自带 Electron，不需要下载器：替身只保证模块图可加载（详见该文件头）
+      '@electron/get': join(packageRoot, 'src', 'app', 'shims', 'electron-get.ts'),
+    },
+    outputOptions: { entryFileNames: '[name].cjs' },
+  },
+  {
+    // 5) 启动器（Node 运行）：找 Electron → 拉起主进程。走 ESM，与独立模式 CLI 同口径。
+    ...shared,
+    target: 'es2022',
+    entry: { 'app-launch': 'src/app/launch.ts' },
+    external: [/^@electron\//, /^node:/, /^@deepseek-ai\//],
+  },
+  {
+    // 6) 设置页（浏览器 IIFE）：react 必须**打进产物**（DSH 不再提供模块系统），
+    //    否则页面里会留下裸 import 而直接白屏。
+    entry: { 'app-settings': 'src/app/page/entry.tsx' },
+    format: ['iife'],
+    platform: 'browser',
+    target: 'es2020',
+    dts: false,
+    outDir: 'lib',
+    clean: false,
+    noExternal: [/^react/, /^scheduler/],
+    // react 打生产包：否则 dev 版会把 React 18.3 的「key 放进 props 展开」迁移告警刷满日志
+    // （设置页组件用 `h(type, {key, ...})` 的写法，DSH 内的 React 18.2 不告警，行为一致）
+    define: { 'process.env.NODE_ENV': '"production"' },
+    outputOptions: { entryFileNames: '[name].js' },
   },
 ]);
