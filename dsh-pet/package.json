@@ -1,65 +1,41 @@
 {
   "name": "dsh-pet",
-  "version": "0.3.7",
-  "description": "吃白饭的蓝色大肥鱼，赖在 DeepSeek Harness 里不走了。平时爱玩魔方、爱吃各种零食、偶尔打个盹，闲不住就在桌面上溜达两圈，被你拖来甩去也照旧赖着；你忙起来它跟着忙前忙后，也会帮你打理余额钱包，闲下来爱碎碎念，还乐意陪你唠两句。",
-  "icon": "assets/logo.png",
+  "version": "0.4.0",
+  "description": "一只住在桌面上的透明动画桌宠：一百余段手绘风动画、拖拽甩抛、多开漫游，还能查余额、碎碎念、陪你聊天。不依赖任何 Agent 框架，双击即用。",
   "keywords": [
-    "dsh",
-    "dsh-plugin",
-    "deepseek-harness",
     "desktop-pet",
     "pet",
+    "electron",
     "floating-widget",
-    "web-ui",
-    "cordis",
-    "react"
+    "transparent-window",
+    "deepseek"
   ],
-  "homepage": "https://github.com/PC2005-cloud/dsh-pet#readme",
+  "homepage": "https://github.com/luoqingciya/dsh-pet#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/PC2005-cloud/dsh-pet.git"
+    "url": "git+ssh://git@github.com/luoqingciya/dsh-pet.git"
   },
   "bugs": {
-    "url": "https://github.com/PC2005-cloud/dsh-pet/issues"
+    "url": "https://github.com/luoqingciya/dsh-pet/issues"
   },
   "_comment": [
     "=============== dsh-pet 包清单说明 ===============",
-    "type: module —— 本包是 ESM",
-    "main: lib/index.js —— 宿主半侧入口（Cordis 插件：name/inject/apply）",
-    "icon —— 插件图标（DSH 插件管理页显示）：相对 package.json 的图片路径，只认 svg/png/jpg/jpeg/webp，≤256 KiB，realpath 后必须留在包目录内；读取方是 dsh-app-boot 的 iconOf，会内联成 base64 data URL 塞进 meta.icon",
-    "exports['./client'] —— 浏览器半侧入口，DSH 模块系统按它提供 /plugins/dsh-pet/client.js",
-    "dsh.bundle.patch —— 声明本包是 bundle，patch 文件是 cordis.patch.yml（安装后自动进层栈）",
-    "dsh.client —— 声明浏览器半侧的注入依赖和平台（web）",
-    "dsh.compatibility.dshReleases —— 对官方 DSH 完整版本逐项声明 compatible/incompatible/unknown；只写宽泛范围不算证据，商城最新三版至少需要一个 compatible",
-    "files —— npm publish 只发这些目录/文件（assets/webm 播放资源（VP9-alpha，浏览器 Chrome/Edge/Firefox 与桌面模式共用）；Safari/HEVC 兼容由仓库流水线支持、fork 定制，不随包发布；assets/preview 的 GIF 仅 README 展示、不入包）",
-    "scripts.encode:webm —— 转码管线（step03 母版 → assets/webm 640×360 VP9-alpha）",
-    "scripts.build —— 构建完整产物 + files 收敛（node scripts/prepare.js）。克隆后手动跑一次；npm publish / npm pack 由 prepack 自动调用",
-    "scripts.prepack —— 发布前链：build（构建）→ typecheck/lint/format → prepack-check（素材健康检查）→ check:openapi。构建只挂这里：npm 11 会把 prepare 判为未批准的安装脚本，而 scripts/prepare.js 不随包发布（files 白名单只留 ensure-electron.mjs），用户一旦按提示批准就必然 ENOENT 失败",
-    "bin.dsh-pet-standalone —— 独立模式 CLI（构建产物 lib/standalone.js）：不打开 DSH 直接跑桌宠，把插件的宿主半边跑在伪 ctx 上；tsdown 的第二个入口负责构建，源码见 src/standalone/",
-    "bin.dsh-pet-app —— 本地应用启动器（构建产物 lib/app-launch.js）：不打开 DSH 直接跑桌宠，但宿主半边跑在**真实**服务上（本地密钥 / OpenAI 兼容模型 / 原生通知），并带托盘与设置窗；源码见 src/app/",
-    "scripts.app / app:package / app:smoke —— 本地应用的运行、便携版打包（dist/，免 Node）与端到端冒烟检查",
-    "peerDependencies —— 运行时由宿主（DSH）提供的模块，本包不打包它们",
+    "type: module —— 源码与启动器是 ESM；Electron 主进程产物是 .cjs（见 scripts/build 注释）",
+    "main: lib/app-entry.cjs —— 打包后的应用入口（按 DSH_PET_ROLE 分发：应用主进程 / 桌面 Helper）",
+    "bin.dsh-pet —— 启动器（lib/app-launch.js）：找 Electron → 拉起主进程；开发态与全局安装都走它",
+    "files —— npm pack/publish 只发运行必需项；便携版由 npm run app:package 生成（dist/，不入库）",
+    "scripts.app —— 构建 + 启动（改代码时用）",
+    "scripts.app:package —— 打便携版：拷贝 Electron 运行时 + resources/app，产出 dist/dsh-pet-app",
+    "scripts.app:smoke —— 端到端冒烟：起 mock OpenAI 端点，验配置/模型/碎碎念/对话/通知帧/工作状态",
+    "scripts.build —— 完整构建（tsdown + 桌面共享核心），克隆后手动跑一次；app / app:package 会自动跑",
+    "scripts.prepack —— 发布前链：构建 → typecheck/lint/format → prepack-check（产物健康检查）→ openapi 校验",
     "engines —— Node.js 兼容下限（由运行依赖 @electron/get@5.1.0 的 engines 决定）",
     "================================================"
   ],
   "type": "module",
-  "main": "lib/index.js",
+  "main": "lib/app-entry.cjs",
   "bin": {
-    "dsh-pet-standalone": "lib/standalone.js",
-    "dsh-pet-app": "lib/app-launch.js"
-  },
-  "exports": {
-    ".": {
-      "types": "./lib/types/index.d.ts",
-      "default": "./lib/index.js"
-    },
-    "./client": {
-      "types": "./lib/types/client/index.d.ts",
-      "default": "./lib/client.js"
-    },
-    "./src/*": "./src/*",
-    "./cordis.patch.yml": "./cordis.patch.yml",
-    "./package.json": "./package.json"
+    "dsh-pet": "lib/app-launch.js"
   },
   "files": [
     "lib",
@@ -71,8 +47,10 @@
     "assets/memes",
     "assets/config.jsonc",
     "assets/logo.png",
+    "scripts/package-app.mjs",
     "scripts/ensure-electron.mjs",
-    "cordis.patch.yml"
+    "dsh-pet.cmd",
+    "dsh-pet.sh"
   ],
   "scripts": {
     "bundle": "tsdown",
@@ -80,14 +58,11 @@
     "watch": "tsdown --watch",
     "ensure:electron": "node scripts/ensure-electron.mjs",
     "start:desktop": "node scripts/start-desktop.mjs",
-    "standalone": "node lib/standalone.js",
-    "dev:mock": "node scripts/dev/mock-server.mjs",
     "build": "node scripts/prepare.js",
     "prepack": "npm run build && npm run typecheck && npm run lint && npm run format:check && node scripts/prepack-check.js && npm run check:openapi",
     "check:openapi": "node scripts/check-openapi.mjs",
     "test": "node --experimental-strip-types --import ./scripts/test-register.mjs --test src/**/*.test.ts",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
-    "types": "node scripts/gen-types.mjs",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -103,38 +78,6 @@
   "dependencies": {
     "@electron-internal/extract-zip": "^1.0.5",
     "@electron/get": "^5.1.0"
-  },
-  "dsh": {
-    "bundle": {
-      "patch": "./cordis.patch.yml"
-    },
-    "compatibility": {
-      "dshReleases": {
-        "0.1.7-rc.2": "incompatible",
-        "0.2.0-rc.1": "compatible",
-        "0.2.0-rc.2": "compatible"
-      }
-    },
-    "client": {
-      "inject": [
-        "@deepseek-ai/dsh-client-connection"
-      ],
-      "platform": "web"
-    }
-  },
-  "peerDependencies": {
-    "@deepseek-ai/cordis": "^4.0.4",
-    "@deepseek-ai/dsh-agent-default-model": "^0.2.0-rc.1",
-    "@deepseek-ai/dsh-client-connection": "^0.2.0-rc.1",
-    "@deepseek-ai/dsh-client-ui-primitives": "^0.2.0-rc.1",
-    "@deepseek-ai/dsh-client-ui-slots": "^0.2.0-rc.1",
-    "@deepseek-ai/dsh-commands": "^0.2.0-rc.1",
-    "@deepseek-ai/dsh-credentials": "^0.2.0-rc.1",
-    "@deepseek-ai/dsh-home-paths": "^0.2.0-rc.1",
-    "@deepseek-ai/dsh-host-webserver": "^0.2.0-rc.1",
-    "@deepseek-ai/dsh-llm": "^0.2.0-rc.1",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -15,7 +15,7 @@
  *
  * 用法：
  *   npm run app                 # 仓库内（先构建）
- *   npx dsh-pet-app             # 装成全局/本地包之后
+ *   npx dsh-pet                 # 装成全局/本地包之后
  *   node lib/app-launch.js --port 3100
  */
 import { spawn } from 'node:child_process';
@@ -41,7 +41,7 @@ function parsePort(argv: string[]): { port?: number; error?: string } {
       return { port: value };
     }
     if (arg === '-h' || arg === '--help') {
-      console.log('用法：dsh-pet-app [--port <端口>]');
+      console.log('用法：dsh-pet [--port <端口>]');
       process.exit(0);
     }
     return { error: `未知参数：${arg}` };
@@ -52,13 +52,13 @@ function parsePort(argv: string[]): { port?: number; error?: string } {
 async function main(): Promise<number> {
   const parsed = parsePort(process.argv.slice(2));
   if (parsed.error) {
-    console.error(`dsh-pet-app: ${parsed.error}`);
+    console.error(`dsh-pet: ${parsed.error}`);
     return 2;
   }
 
   const mainScript = join(ROOT, 'lib', 'app-main.cjs');
   if (!existsSync(mainScript)) {
-    console.error(`dsh-pet-app: 缺少构建产物 ${mainScript}，请先运行 npm run build`);
+    console.error(`dsh-pet: 缺少构建产物 ${mainScript}，请先运行 npm run build`);
     return 1;
   }
 
@@ -112,6 +112,6 @@ main()
     process.exit(code);
   })
   .catch((error: unknown) => {
-    console.error(`dsh-pet-app: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`);
+    console.error(`dsh-pet: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`);
     process.exit(1);
   });

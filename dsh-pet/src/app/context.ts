@@ -1,31 +1,28 @@
 /**
- * 本地应用的宿主上下文：把插件宿主半边（`src/host/index.ts` 的 `apply`）跑在**真实服务**上。
+ * 本地应用的宿主上下文：把宿主半边（`src/host/index.ts` 的 `apply`）跑在**真实服务**上。
  *
- * 与 `src/standalone/context.ts` 的区别只有一处，但很关键：那一份把 DSH 服务全部换成
- * 「明确降级」的替身（没有凭证、没有模型 → 余额/碎碎念/对话一律不可用）；本文件把同样几个
- * 服务换成**本地实现**：
+ * `apply` 只要求一个 Cordis 风格的 `ctx`，它自己负责路由表、配置合并、素材归属、
+ * 桌面 Helper 的拉起与守护。本文件提供的就是那几项服务：
  *
  *   - `credentials.resolve`  → 本地 `secrets.json`（设置页填写，权限 0600）
  *   - `agentDefaultModel`    → 本地 `app-config.json` 的服务商 + 模型
  *   - `llm`                  → OpenAI 兼容端点（`llm-openai.ts`）
- *   - `on(...)`              → 真实的事件总线：本地应用把「一次对话生成」合成
- *                              `turn/start` / `turn/end` 会话事件投进来，于是插件的
+ *   - `on(...)`              → 真实的事件总线：应用把「一次对话生成」合成
+ *                              `turn/start` / `turn/end` 会话事件投进来，于是宿主的
  *                              **工作状态联动**与**系统通知帧**两条链路照常工作，
  *                              不需要为本地模式另写一套状态机。
- *   - `get(name)`            → 恒 undefined（账号余额服务 `deepseekAccount` 在本地不存在）
+ *   - `get(name)`            → 恒 undefined（账号余额服务在本应用里不存在）
  *
- * 路由表、配置合并、素材归属、桌面 Helper 的拉起与重启仍然全部由插件那一份 `apply` 负责，
- * 本文件一行业务逻辑都没有。
+ * 本文件一行业务逻辑都没有：加一个宠物端点、改一处配置合并，仍然只改 `src/host`。
  */
-import type { IncomingMessage, ServerResponse } from 'node:http';
 
 import type { AppConfig } from './local-config';
 import { readSecrets, type SecretMap } from './local-config';
 import { createLlmService, type LlmService } from './llm-openai';
-import type { RegisteredRoute, StandaloneLogger } from '../standalone/context';
+import type { AppLogger, RegisteredRoute } from './server';
 
-/** 插件注册到 `ctx.webServer` 的一条路由（与独立模式同一形状） */
-export type { RegisteredRoute, StandaloneLogger };
+/** 路由与日志类型由 `./server` 定义，这里原样转出，调用方只 import 一处 */
+export type { AppLogger, RegisteredRoute };
 
 /** 事件处理器（插件只用到 (session, event) 与 (payload) 两种形状） */
 type EventHandler = (...args: unknown[]) => unknown;
@@ -33,7 +30,7 @@ type EventHandler = (...args: unknown[]) => unknown;
 export interface AppContextOptions {
   /** 本地服务端口（函数形式：先监听、端口确定后才 `apply`） */
   port: number | (() => number);
-  logger: StandaloneLogger;
+  logger: AppLogger;
   /** 路由收集数组（与服务共用同一个） */
   routes?: RegisteredRoute[];
   /** 现读配置（设置页保存后立即生效） */
@@ -153,6 +150,13 @@ export function createAppContext(options: AppContextOptions): AppContext {
      * 空串 = 跟随主服务商。宿主半边会优先读这个能力（DSH 内不提供，行为不变）。
      */
     petBalanceProvider: (): string => configOf().balanceProvider,
+
+    /**
+     * 宿主形态 = 本地应用。宿主据此把右键「打开网站」指向本应用的设置页
+     * （而不是 DSH 的 `dsh://open`）——本地应用同样是 Electron，光看 `process.versions.electron`
+     * 分不出来。
+     */
+    petHostKind: (): string => 'app',
   };
 
   return {
@@ -184,6 +188,3 @@ export function createAppContext(options: AppContextOptions): AppContext {
     },
   };
 }
-
-/** 供 server 层复用的请求/响应类型别名（避免各文件重复 import node:http 类型） */
-export type { IncomingMessage, ServerResponse };

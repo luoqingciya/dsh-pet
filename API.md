@@ -1,10 +1,10 @@
 # dsh-pet 对外 HTTP 接口一览
 
-dsh-pet 的宿主半侧向 DSH 自己的 Web 服务注册了**一条前缀路由** `/dsh-pet-7340`，浏览器端、
-桌面端、设置页与第三方插件全都访问同一份实现。本文只做**功能预览**（接口名 + 一句话），
+dsh-pet 在本地 `127.0.0.1` 上起了一个 HTTP 服务，把所有能力挂在**一条前缀路由** `/dsh-pet-7340` 下。
+桌面窗口、设置页与第三方脚本访问的都是同一份实现。本文只做**功能预览**（接口名 + 一句话），
 完整契约——参数、响应体、字段含义、错误码与示例——见根目录的 [`openapi.yaml`](openapi.yaml)。
 
-- **基址**：`http://127.0.0.1:<port>/dsh-pet-7340`，`<port>` 是 DSH Web 服务实际监听的端口
+- **基址**：`http://127.0.0.1:<port>/dsh-pet-7340`，`<port>` 默认 `3080`（被占用会自动顺延，可用 `--port` 指定）
 - **只监听 127.0.0.1，且没有鉴权**：任何能访问本机该端口的进程都能调用，请勿转发到公网
 
 ---
@@ -16,7 +16,7 @@ dsh-pet 的宿主半侧向 DSH 自己的 Web 服务注册了**一条前缀路由
 | `GET /dsh-pet-7340/state` | **轮询唯一数据源**：一次拿到说话、工作状态、系统通知、余额四类状态；另带 `configVersion`（配置版本指纹，变了就该重拉 `/config`） |
 | `GET /dsh-pet-7340/config` | 读合并后的成品配置（内置默认 + 用户层，字段已填满） |
 | `GET /dsh-pet-7340/config/meta` | 配置文件路径、各类数据落盘位置、卸载该用哪个 profile |
-| `GET /dsh-pet-7340/models` | 可用服务商与模型清单（与 DSH 自己的模型选择器同源） |
+| `GET /dsh-pet-7340/models` | 可用服务商与模型清单（来自「本地服务」里配置的端点） |
 | `GET /dsh-pet-7340/chat?pet=` | 读某只桌宠最近的对话记忆窗口 |
 
 ## 二、让桌宠做事
@@ -79,29 +79,18 @@ curl -s -X POST "$BASE/anim?pet=main" \
      -d '{"name":"东张西望"}'
 ```
 
-## 独立模式（不打开 DSH）
+## 服务本身的运维端点
 
-不启动 DSH 时，同一份 `/dsh-pet-7340` 契约由一个本机 HTTP 服务提供（`src/standalone/server.ts`，
-用法见 [`dsh-pet/README.md`](dsh-pet/README.md) 的「🧍 独立运行（完全不打开 DSH）」）：
-
-```bash
-BASE=http://127.0.0.1:3080/dsh-pet-7340   # 独立模式默认端口 3080（被占用则顺延）
-```
-
-**上表所有端点与约定在这里完全不变** —— 独立模式把插件的宿主半边跑在伪 ctx 上，
-路由表仍是 `src/host/index.ts` 那一份（桌面助手照旧走 bridge 管道）。因此本文件与
-[`openapi.yaml`](openapi.yaml) 描述的 `/dsh-pet-7340` 契约**不需要为独立模式做任何改动**。
-
-独立模式另外多两个只属于该服务的运维端点（不在 `/dsh-pet-7340` 前缀下，故不在 OpenAPI 契约里）：
+除 `/dsh-pet-7340` 前缀外，本地服务还提供两个运维端点（不在 OpenAPI 契约里）：
 
 | 端点 | 说明 |
 | --- | --- |
-| `GET /`、`GET /health` | 服务与插件信息：名称、插件根与版本、监听端口、已运行秒数 |
-| `POST /shutdown` | 优雅停机：释放插件注册的 effect（停止桌面助手、清掉周期定时器）后关闭服务，进程退出码 0 |
+| `GET /health` | 服务信息：名称、版本、监听端口、已运行秒数 |
+| `POST /shutdown` | 优雅停机：释放定时器与桌面窗口后关闭服务（脚本化停机用） |
 
-依赖 DSH 的能力在独立模式下**明确降级**（结构化失败，不假装成功）：`POST /whisper`、`POST /chat`
-回 `{ ok: false, reason: 'provider-missing' }`（没有模型服务），`POST /balance` 回
-`{ ok: false, reason: 'unsupported' }`，`GET /state` 的各状态位保持空闲初始值。
+设置页与本地服务接口挂在 `/app/*`（`GET /app/api/config`、`POST /app/api/config`、
+`POST /app/api/test`、`POST /app/api/open-dir`），同样不在 OpenAPI 契约里——
+它们是这个应用的内部界面，不是给第三方用的稳定接口。
 
 ## 相关
 

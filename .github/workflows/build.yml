@@ -1,0 +1,95 @@
+name: build
+
+on:
+  push:
+    branches: [dev, main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: dsh-pet
+
+jobs:
+  # 质量门禁：类型、规范、单测、产物结构、接口文档对齐
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: dsh-pet/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm test
+      - run: node scripts/prepack-check.js
+      - run: npm run check:openapi
+
+  # 三平台便携版：拷一份对应平台的 Electron 运行时 + resources/app
+  package:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            suffix: win-x64
+          - os: macos-latest
+            suffix: mac-arm64
+          - os: ubuntu-latest
+            suffix: linux-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: dsh-pet/package-lock.json
+      - run: npm ci
+      # 便携版直接复用这份 Electron：package-app.mjs 从 DSH_PET_ELECTRON_DIR 拷贝
+      - run: npm install --no-save electron@43.3.0
+      - run: npm run build
+      - name: Package
+        env:
+          DSH_PET_ELECTRON_DIR: ${{ github.workspace }}/dsh-pet/node_modules/electron/dist
+        run: node scripts/package-app.mjs
+      - name: Archive (Windows)
+        if: runner.os == 'Windows'
+        run: Compress-Archive -Path dist/dsh-pet-app/* -DestinationPath dist/dsh-pet-${{ matrix.suffix }}.zip
+      - name: Archive (macOS / Linux)
+        if: runner.os != 'Windows'
+        run: cd dist && zip -qry dsh-pet-${{ matrix.suffix }}.zip dsh-pet-app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dsh-pet-${{ matrix.suffix }}
+          path: dsh-pet/dist/dsh-pet-*.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  # 打 tag 时把三平台产物挂到 Release
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/dsh-pet-*.zip
+          generate_release_notes: true
+          draft: false

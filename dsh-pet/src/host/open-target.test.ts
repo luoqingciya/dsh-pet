@@ -26,17 +26,21 @@ const host = readSource('./index.ts');
 const main = readSource('../../runtime/electron-helper/main.js');
 const constants = readSource('../../runtime/electron-helper/constants.js');
 const sprite = readSource('../../runtime/electron-helper/sprite.js');
-const standaloneContext = readSource('../standalone/context.ts');
+const appContext = readSource('../app/context.ts');
 
 describe('「打开网站」按宿主形态自动分派', () => {
   test('宿主：桌面应用判定 + 形态注入', () => {
     assert.ok(
       /const isDesktopHost = \(\): boolean => Boolean\(process\.versions\.electron\)/.test(host),
-      '宿主必须用 process.versions.electron 判定形态（桌面应用以 ELECTRON_RUN_AS_NODE 跑，该字段仍在；dsh web 是纯 Node）',
+      '宿主必须用 process.versions.electron 判定形态（桌面应用以 ELECTRON_RUN_AS_NODE 跑，该字段仍在；纯 Node 宿主不是）',
     );
     assert.ok(
-      /DSH_PET_OPEN_TARGET: isDesktopHost\(\) \? 'desktop' : 'site'/.test(host),
-      'launchHelper 必须把形态注入 Helper（否则桌面宿主下仍只会打开浏览器站点）',
+      /DSH_PET_OPEN_TARGET: isDesktopHost\(\) && hostKind\(\) !== 'app' \? 'desktop' : 'site'/.test(host),
+      'launchHelper 必须把形态注入 Helper；本地应用（petHostKind = app）必须排除在 desktop 之外',
+    );
+    assert.ok(
+      /petHostKind\?: \(\) => unknown/.test(host),
+      '宿主必须软取 petHostKind（DSH 不提供该能力，行为与改造前一致）',
     );
   });
 
@@ -72,7 +76,10 @@ describe('「打开网站」按宿主形态自动分派', () => {
     );
   });
 
-  test('独立模式不注入该变量 → 自动回落 site（不破坏"不打开 DSH 也能养桌宠"）', () => {
-    assert.ok(!/DSH_PET_OPEN_TARGET/.test(standaloneContext), '独立模式必须不注入形态：默认 site，行为与以前一致');
+  test('本地应用声明 petHostKind=app → 自动回落 site（打开的是自己的设置页）', () => {
+    assert.ok(
+      /petHostKind: \(\): string => 'app'/.test(appContext),
+      '本地应用必须声明宿主形态，否则会去唤起 dsh://open',
+    );
   });
 });

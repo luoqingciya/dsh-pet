@@ -28,7 +28,6 @@ const readSource = (rel: string): string => readFileSync(fileURLToPath(new URL(r
 
 const host = readSource('./index.ts');
 const sprite = readSource('../../runtime/electron-helper/sprite.js');
-const clientPet = readSource('../client/pet.ts');
 const menu = readSource('../shared/menu.ts');
 
 describe('桌面端「重载配置」—— 菜单 → 宿主重启 Helper', () => {
@@ -54,10 +53,6 @@ describe('桌面端「重载配置」—— 菜单 → 宿主重启 Helper', () 
       new RegExp(`rest === '${route}'`).test(host),
       `桌面端请求的路由 /${route} 在宿主不存在（改名只改了一侧）`,
     );
-  });
-
-  test('浏览器端不注入该项：网页刷新即可，重载是桌面专属', () => {
-    assert.ok(!/action: 'reload'/.test(clientPet), '浏览器端不得有 reload 菜单项（它会重启整个桌面 Helper）');
   });
 
   test('syncDesktop 是唯一的重启入口：两个 /config 写接口、/reload 与 /pet-display 都走它', () => {

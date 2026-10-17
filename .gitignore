@@ -51,3 +51,6 @@ dsh-pet/dist/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# ── 本地工作记录（AI 协作工具的会话/记忆，不入库）──
+.workbuddy-ai/

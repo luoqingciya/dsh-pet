@@ -205,16 +205,6 @@ describe('decideBalanceNotice —— 弹不弹文字说明（两端共用同一�
 });
 
 describe('源码守卫 —— 不可用状态不得再被静默丢掉', () => {
-  test('浏览器 overlay：渲染处不许再要求 balance.ok，且由 noticeTick 驱动气泡、判定来自 shared', () => {
-    const clientPet = readSource('../client/pet.ts');
-    assert.ok(
-      !/balance\.ok\s*&&\s*cfg\.balanceEnabled/.test(clientPet),
-      '余额气泡不得再要求 balance.ok：那是「未登记服务商完全没反应」的根因，文字说明走同一个气泡',
-    );
-    assert.ok(/balanceNoticeTick/.test(clientPet), '容器必须把「该提示不可用原因」传给各宠物');
-    assert.ok(/decideBalanceNotice/.test(clientPet), '弹窗判定必须来自 src/shared（两端同一份），不得各写一份');
-  });
-
   test('桌面外壳：同一条判定 + 不可用也走气泡渲染（不再只写 console）', () => {
     const events = readSource('../../runtime/electron-helper/events.js');
     const sprite = readSource('../../runtime/electron-helper/sprite.js');

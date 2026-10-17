@@ -1,25 +1,25 @@
 /**
- * dsh-pet 本地应用主进程 —— 不打开 DSH，桌宠自己就是一只应用。
+ * dsh-pet 应用主进程。
  *
- * 组成（每一块都复用插件已有实现，不另写业务）：
+ * 组成（每一块都复用已有的宿主半边，不另写业务）：
  *   1. **本地宿主**：`createAppContext` 提供真实的 credentials / llm / 事件总线，
- *      插件宿主半边的 `apply()` 在其上跑起来（路由表、配置合并、素材归属、桌面 Helper 守护全在那一份里）；
- *   2. **本地服务**：`listenStandaloneServer` 监听 127.0.0.1，把插件路由原样接上，
+ *      `src/host` 的 `apply()` 在其上跑起来（路由表、配置合并、素材归属、桌面 Helper 守护都在那一份里）；
+ *   2. **本地服务**：`listenAppServer` 监听 127.0.0.1，把宿主路由原样接上，
  *      并额外提供设置页与「本地服务」接口（`web-ui.ts`）；
- *   3. **桌面宠物**：由插件自己拉起 Electron 透明小窗（`runtime/electron-helper`），
- *      与 DSH 内运行**同一条路径**——本文件不碰窗口，只保证服务和 Electron 路径可用；
+ *   3. **桌面宠物**：由宿主自己拉起 Electron 透明小窗（`runtime/electron-helper`）——
+ *      本文件不碰窗口，只保证服务和 Electron 路径可用；
  *   4. **托盘 + 设置窗口**：应用的壳。关闭设置窗口不退出，退出走托盘菜单。
  *
- * 与 DSH 的边界：不 import 任何 `@deepseek-ai/*` 运行时包（构建期由 alias 换成同口径替身），
- * 不读 DSH 的 profile / 会话 / 凭据；数据目录是应用自己的 `app.getPath('userData')`。
+ * 边界：运行期不 import 任何 `@deepseek-ai/*`（构建期由 alias 换成 `src/app/shims/*` 的替身），
+ * 数据目录是应用自己的 `app.getPath('userData')`。
  */
 import { app, BrowserWindow, Menu, Notification, Tray, nativeImage, shell } from 'electron';
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { apply } from '../host/index';
-import { listenStandaloneServer } from '../standalone/server';
-import type { RegisteredRoute } from '../standalone/context';
+import { listenAppServer } from './server';
+import type { RegisteredRoute } from './server';
 import { createAppContext } from './context';
 import { readAppConfig, readSecrets } from './local-config';
 import type { LlmService } from './llm-openai';
@@ -303,7 +303,7 @@ async function bootstrap(): Promise<void> {
     dataDir: () => petDataDir(),
   });
 
-  server = await listenStandaloneServer({
+  server = await listenAppServer({
     routes,
     logger: log,
     port: Number(process.env.DSH_PET_APP_PORT ?? 3080),

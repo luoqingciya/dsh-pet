@@ -2,7 +2,7 @@
  * dsh-pet HTTP 接口测试页的本地代理。
  *
  * 为什么需要它：宿主路由（src/host/index.ts）**不返回 CORS 头**——浏览器半侧之所以能用，
- * 是因为它由 DSH 自己的 Web 服务同源提供。测试页要么是 file://（Origin: null），
+ * 是因为设置页由应用自己的本地服务同源提供。测试页要么是 file://（Origin: null），
  * 要么是本地另一个端口，跨域请求会被浏览器直接拦掉（不是 404，是压根发不出去）。
  * 所以这里起一个同源小服务：转发到宿主，并补上 CORS 头。
  *
@@ -72,7 +72,7 @@ function forward(req, res) {
   upstream.on('error', (err) => {
     const msg =
       err.code === 'ECONNREFUSED'
-        ? `连不上宿主 http://127.0.0.1:${hostPort}——DSH 没在跑，或端口不对（页面上改端口，或启动时 --port 指定）`
+        ? `连不上宿主 http://127.0.0.1:${hostPort}——应用没在跑，或端口不对（页面上改端口，或启动时 --port 指定）`
         : `转发失败：${err.message}`;
     res.writeHead(502, { 'content-type': 'application/json; charset=utf-8', ...CORS });
     res.end(JSON.stringify({ proxyError: msg, target }, null, 2));

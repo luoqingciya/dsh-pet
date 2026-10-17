@@ -346,7 +346,7 @@ export function LocalPanel(): React.ReactElement {
 
       <div className="card">
         <h2>系统通知</h2>
-        <p className="hint">脱离 DSH 后没有会话事件，通知只覆盖本地能观测到的两类事件。</p>
+        <p className="hint">宠物回话完成、余额告急时弹系统通知（窗口失焦时才有意义，所以一律走原生通知）。</p>
         <div className="row">
           <label>对话回复</label>
           <label className="chk">

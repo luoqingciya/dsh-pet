@@ -2,10 +2,7 @@ lib
 node_modules
 assets
 runtime/electron-helper/shared-core.js
-cordis.patch.yml
 package-lock.json
-pnpm-lock.yaml
-pnpm-workspace.yaml
 # 启动脚本（cmd/sh 无对应 parser，且原样保留换行与注释）
 dsh-pet.cmd
 dsh-pet.sh

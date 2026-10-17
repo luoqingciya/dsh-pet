@@ -1,70 +1,35 @@
 /**
- * 本地应用设置页的渲染入口（浏览器 IIFE bundle：`lib/app-settings.js`）。
+ * 设置页渲染入口（浏览器 IIFE bundle：`lib/app-settings.js`）。
  *
- * 页面里没有第二条业务实现：
- *   - 「桌宠」页签 = 插件原生的 `makePetConfigSection`（`src/client/settings.ts`），一行没改；
- *   - 「本地服务」页签 = `./local-panel`，补的是 DSH 里由宿主提供、脱离后必须自带的那部分。
+ * 两个页签：
+ *   - 桌宠：`./pet-panel` —— 大小 / 位置 / 功能开关 / 外观 / 手感 / 存储；
+ *   - 本地服务：`./local-panel` —— 模型端点、API Key、余额服务商、通知开关。
  *
- * 为什么这里要自己填 `petBridge`：那个对象在 DSH 里由**宠物容器**（`src/client/pet.ts`）写入
- * （当前宠物列表 / 重载回调 / 新增模板）。本地应用没有浏览器内浮层，容器不存在，所以由本页
- * 拉一次 `/config` 成品聚合并拍平后填进去——设置页拿到的数据与 DSH 内完全一致。
+ * 为什么设置页走 HTTP 而不是 Electron IPC：页面与宿主同源，`/dsh-pet-7340/*` 与 `/app/api/*`
+ * 直接可用；顺带让排障时能用普通浏览器打开同一页（`http://127.0.0.1:3080/app/`）。
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactElement } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 import { createRoot } from 'react-dom/client';
-import { jsx } from 'react/jsx-runtime';
 
-import { makePetConfigSection, petBridge, zh } from '../../client/settings';
-import { flattenConfigPets } from '../../shared/config';
-import type { Pet } from '../../shared/types';
 import { LocalPanel } from './local-panel';
+import { PetPanel } from './pet-panel';
 
-/** 页面文案：直接用插件的中文字典（键缺失回落键名，绝不显示空白） */
-const t = (key: string): string => (zh as Record<string, string>)[key] ?? key;
-
-/** 工厂要求的最小 useRef 签名（React 的 useRef 有多个重载，这里收敛成它要的那一个） */
-const useRefCompat = useRef as unknown as <T>(initial: T) => MutableRefObject<T>;
-
-/** 成品聚合 → petBridge（与 pet.ts 的写法同源） */
-function adoptConfig(merged: Record<string, Record<string, unknown>>): void {
-  petBridge.current = flattenConfigPets(merged);
-  const main = merged.main;
-  petBridge.template = Array.isArray(main?.pets) ? ((main.pets as Pet[])[0] ?? undefined) : undefined;
+/** 版本号只是页头展示，读不到不影响使用 */
+async function readVersion(): Promise<string> {
+  try {
+    const info = (await fetch('/app/api/config').then((res) => res.json())) as { runtime?: { version?: string } };
+    return info.runtime?.version ?? '';
+  } catch {
+    return '';
+  }
 }
 
 function App(): ReactElement {
   const [tab, setTab] = useState<'pet' | 'local'>('pet');
   const [version, setVersion] = useState('');
-  const [error, setError] = useState('');
-
-  // 设置页组件只造一次（内部会注入一次样式）
-  const PetSection = useMemo(
-    () => makePetConfigSection({ h: jsx, useState, useEffect, useRef: useRefCompat, useCallback, t }),
-    [],
-  );
 
   useEffect(() => {
-    // 重载回调：设置页保存/同步后会带着成品聚合调它。本地应用里没有浏览器内浮层需要重渲染，
-    // 但要把最新列表留在 petBridge 上，供下次进入页面时初始化。
-    petBridge.reload = (merged?: Record<string, Record<string, unknown>>): void => {
-      if (merged) adoptConfig(merged);
-    };
-    void (async () => {
-      try {
-        const merged = (await fetch('/dsh-pet-7340/config', { cache: 'no-store' }).then((r) => {
-          if (!r.ok) throw new Error('HTTP ' + r.status);
-          return r.json();
-        })) as Record<string, Record<string, unknown>>;
-        adoptConfig(merged);
-      } catch (e) {
-        setError(`读取桌宠配置失败：${e instanceof Error ? e.message : String(e)}`);
-      }
-      try {
-        const info = (await fetch('/app/api/config').then((r) => r.json())) as { runtime?: { version?: string } };
-        setVersion(info.runtime?.version ?? '');
-      } catch {
-        /* 版本号只是展示，读不到不影响使用 */
-      }
-    })();
+    void readVersion().then(setVersion);
   }, []);
 
   return (
@@ -87,8 +52,7 @@ function App(): ReactElement {
           本地服务
         </button>
       </div>
-      {error ? <div className="card warn">{error}</div> : null}
-      {tab === 'pet' ? <PetSection /> : <LocalPanel />}
+      {tab === 'pet' ? <PetPanel /> : <LocalPanel />}
     </div>
   );
 }

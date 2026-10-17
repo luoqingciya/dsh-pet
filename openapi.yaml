@@ -2,24 +2,23 @@ openapi: 3.1.0
 
 info:
   title: dsh-pet HTTP API
-  version: 0.3.7
-  summary: DSH 桌宠插件的宿主 HTTP 接口
+  version: 0.4.0
+  summary: dsh-pet 本地 HTTP 接口
   description: |
-    dsh-pet 的宿主（host）半侧通过 DSH 的 `webServer` 服务注册**一条前缀路由** `/dsh-pet-7340`，
-    浏览器半侧、桌面 Electron 半侧、以及设置页全都消费同一份实现（`handlePetRoute`）。
-    本文件是该路由的公开契约：任何第三方插件 / 脚本都可以按此访问桌宠能力。
+    dsh-pet 在本地 `127.0.0.1` 上起一个 HTTP 服务，把全部能力挂在**一条前缀路由** `/dsh-pet-7340` 下。
+    桌面透明窗（经 bridge 管道）与设置页消费的是同一份实现（`handlePetRoute`）。
+    本文件是该路由的公开契约：任何第三方脚本都可以按此访问桌宠能力。
 
     ## 部署形态
 
-    接口挂在 **DSH 自己的 Web 服务**上，因此没有固定端口：
+    接口挂在本地服务上，默认端口 3080（被占用会自动顺延）：
 
-    - `servers` 里的 `http://127.0.0.1:{port}` 是占位——`{port}` 就是 `ctx.webServer.port`，
-      也就是 `dsh web` 启动时打印的地址（未显式指定端口时默认 3080）。
-      插件本身不固定监听端口，只往宿主的 Web 服务上挂路由。
+    - `servers` 里的 `http://127.0.0.1:{port}` 是占位：`{port}` 就是应用实际监听的端口
+      （默认 3080，被占用会自动顺延；可用 `--port` 或 `DSH_PET_APP_PORT` 指定）。
     - 只监听 **127.0.0.1**，不对外网暴露，也**没有任何鉴权**：任何能访问本机该端口的进程都能调用。
       请勿把该端口转发/代理到公网。
-    - 桌面半侧不走 HTTP，而是 `dsh-pet-bridge://` 自定义 scheme 经主进程管道转发到**同一个**
-      `handlePetRoute`。所以下表所有路径对两端行为完全一致。
+    - 桌面透明窗不走 HTTP，而是 `dsh-pet-bridge://` 自定义 scheme 经主进程管道转发到**同一个**
+      `handlePetRoute`。所以下表所有路径对两种访问方式行为完全一致。
 
     ## 两分钟上手
 
@@ -64,12 +63,12 @@ externalDocs:
 servers:
   - url: http://127.0.0.1:{port}
     description: |
-      本机 DSH Web 服务。`{port}` = `ctx.webServer.port`（`dsh web` 默认 3080）。
+      本机本地服务。`{port}` 默认 3080。
       路由前缀固定为 `/dsh-pet-7340`（7340 是历史遗留的名字，**不是端口号**）。
     variables:
       port:
         default: "3080"
-        description: DSH Web 服务实际监听的端口
+        description: 本地服务实际监听的端口
 
 tags:
   - name: State
@@ -383,7 +382,7 @@ paths:
         返回该宠物的最近若干轮对话（**一次性读取，不是轮询**），供对话弹窗打开时回填历史。
 
         记忆的唯一读写方是宿主（落盘在 `memory.json`），浏览器与桌面两端都只是客户端，
-        因此同一 DSH 实例下的两端**天然共享同一份记忆**。文件全量保留、不删除，
+        因此桌面窗口与设置页**天然共享同一份记忆**。文件全量保留、不删除，
         只是响应时按 `chatMemoryRounds`（默认 5 轮，1 轮 = 1 问 1 答）截取尾部。
       parameters:
         - $ref: "#/components/parameters/PetIdQuery"
@@ -466,7 +465,7 @@ paths:
       summary: 读取合并后的成品配置
       description: |
         返回**合并成品**：内置默认（`assets/config.jsonc`）与用户层
-        （`$DSH_HOME/dsh-pet/main-config.jsonc`）深度合并后的结果，
+        （`<数据目录>/dsh-pet/main-config.jsonc`）深度合并后的结果，
         每个条目的字段都已填满（动画池、权重、物理参数、工作状态文案等），
         浏览器/桌面/设置页直接消费，**无需任何校验或兜底**。
 
@@ -630,7 +629,7 @@ paths:
 
         **层归属由宿主反查，调用方不要传**：`id` 在合并后是**全局唯一**的（`mergePet` 会跳过
         重复实例），宿主用 `findPetInstance` 定位后按条目归属决定写哪个文件——`main` 条目写
-        `$DSH_HOME/dsh-pet/main-config.jsonc`，文件宠物写 `pet/<前缀>-config.json`（`.jsonc` 同样支持）。
+        `<数据目录>/dsh-pet/main-config.jsonc`，文件宠物写 `pet/<前缀>-config.json`（`.jsonc` 同样支持）。
 
         写入语义与 `PUT /config` 一致：白名单重建 + 磁盘原值透传（不抹掉手写的精调字段）。
         写盘后同样**异步**重启桌面 Helper、不阻塞响应——响应可能来不及送达（发起者往往就是
@@ -726,7 +725,7 @@ paths:
                   profile:
                     type: string
                     description: |
-                      DSH profile 名，用于拼接卸载命令
+                      历史字段（DSH 插件时期用于拼接卸载命令），本地应用恒为空串
                       `dsh plugin --profile <名> remove dsh-pet`。反推不出时为空串。
 
   /dsh-pet-7340/models:
@@ -735,7 +734,7 @@ paths:
       operationId: listModels
       summary: 列出可选服务商与模型
       description: |
-        设置页「AI 模型」下拉框的数据源，与 DSH 自己的模型选择器**同源**——
+        设置页「AI 模型」下拉框的数据源，来自「本地服务」里配置的端点——
         都来自宿主 `llm` 服务：`listProviders()` 是已注册的实时服务商路由，
         `listModels(provider)` 是该路由下的模型。
 
@@ -885,7 +884,7 @@ paths:
           按素材根决定**素材归属**，与动画（`/thumb`）同一套语义：
           1. `pet/<素材根>-memes/` 存在（种类自带表情包）：**只查该目录**，查不到即 `404` 显式报错，
              **绝不回落**别的目录；
-          2. 不存在：用户目录 `$DSH_HOME/dsh-pet/memes/` 优先，其次包内 `assets/memes/`（逐文件合并，
+          2. 不存在：用户目录 `<数据目录>/dsh-pet/memes/` 优先，其次包内 `assets/memes/`（逐文件合并，
              与 `main-animation/<ext> → 包内 assets/<ext>` 的主素材链同构）。
 
           素材根 = 该宠物的条目 key（`assetRoot`：主配置宠物为 `main`，文件宠物为配置文件前缀）。
@@ -1188,7 +1187,7 @@ components:
         data:
           description: |
             `WorkStatusSnapshot`；`null` = 从未写过。
-            由宿主监听 DSH 会话事件（`turn/start`、`tool/call`、`tool/result`、
+            由宿主监听应用合成的会话事件（`turn/start`、`tool/call`、`tool/result`、
             `approval/asked`、`turn/end`）聚合后写入。
           oneOf:
             - $ref: "#/components/schemas/WorkStatusSnapshot"
@@ -1221,7 +1220,7 @@ components:
         data:
           description: |
             通知帧；`null` = 从未写过。
-            由宿主监听 DSH 宿主事件生成，浏览器轮询到变化后弹系统 toast。
+            由宿主监听应用合成的会话事件生成，应用轮询到变化后弹原生通知。
             **单槽**：新通知直接覆盖旧的，不排队（1 秒轮询下同一拍只处理最新一条）。
           oneOf:
             - $ref: "#/components/schemas/NotifyFrame"
@@ -1306,7 +1305,7 @@ components:
     AgentErrorFrame:
       type: object
       required: [type, message]
-      description: 无回合位置的生成失败（DSH 0.1.5+ 的 `agent/error` 事件）
+      description: 无回合位置的生成失败（应用上报的 `agent/error` 事件）
       properties:
         type:
           type: string

@@ -692,6 +692,18 @@ export function apply(ctx: any): void {
   /** 「无图形环境」提示只在进程生命周期内打一次，避免守护循环刷屏 */
   let displayWarned = false;
 
+  /**
+   * 宿主形态（由 ctx 提供，可缺失）：`'app'` = 本地应用。
+   *
+   * 为什么需要它：`isDesktopHost()` 只能判断"宿主是不是 Electron"，而**本地应用也是 Electron**
+   * ——但本地应用没有 DSH 主窗口，右键「打开网站」不该去唤起 `dsh://open`，而应打开它自己的
+   * 设置页。DSH 宿主不提供这个能力，判定结果与改造前逐字一致。
+   */
+  const hostKind = (): string => {
+    const read = (ctx as { petHostKind?: () => unknown }).petHostKind;
+    return typeof read === 'function' ? String(read() || '') : '';
+  };
+
   /** 用已确认存在的 Electron 路径拉起桌面 Helper（每只桌面宠物一个局部小窗口）。 */
   const launchHelper = (electronPath: string | undefined): void => {
     if (helper || disposed) return;
@@ -727,7 +739,7 @@ export function apply(ctx: any): void {
           // 宿主形态决定工具项「打开网站」的去向（同名菜单项，两端两种语义）：
           //   desktop = 宿主是 DSH 桌面应用 → 唤起桌面应用主窗口（helper 走 dsh://open，见 main.js）
           //   site    = dsh web / 独立模式 → 系统默认浏览器打开站点（原行为，别破坏）
-          DSH_PET_OPEN_TARGET: isDesktopHost() ? 'desktop' : 'site',
+          DSH_PET_OPEN_TARGET: isDesktopHost() && hostKind() !== 'app' ? 'desktop' : 'site',
           DSH_PET_SCALE: '1',
           // 打开 bridge 协议：main.js 注册 dsh-pet-bridge scheme，把渲染端请求经管道转给宿主
           DSH_PET_BRIDGE: '1',
