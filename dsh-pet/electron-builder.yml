@@ -22,6 +22,12 @@ asar: false
 directories:
   output: dist/installer
 
+# 只保留中文与英文语言包：Electron 默认带 55 个 locale（47MB），
+# 一个中文桌宠只需要 zh-CN + en-US，裁剪后省 ~45MB。
+electronLanguages:
+  - zh-CN
+  - en-US
+
 # 只打运行必需的文件（与 package.json 的 files 口径一致）
 # node_modules 明确排除：主进程与设置页都已被打包成单文件，运行时不需要任何 npm 依赖
 # （启动器才需要 @electron/get，而安装版根本不经过启动器）。
@@ -42,7 +48,8 @@ win:
     - target: nsis
       arch: [x64]
   icon: assets/logo.png
-  artifactName: dsh-pet-setup-${version}.${ext}
+  # 与免安装包统一命名：dsh-pet-<版本>-<平台>-<架构>-<类型>.<ext>
+  artifactName: dsh-pet-${version}-win-${arch}-setup.${ext}
 
 nsis:
   oneClick: false

@@ -12,9 +12,9 @@
 
 **从 Releases 下载**（推荐）：
 
-- Windows：`dsh-pet-setup-<版本>.exe`（安装版）或 `dsh-pet-win-x64.zip`（免安装）
-- macOS：`dsh-pet-mac-arm64.zip`
-- Linux：`dsh-pet-linux-x64.zip`
+- Windows：`dsh-pet-<版本>-win-x64-setup.exe`（安装版）或 `dsh-pet-<版本>-win-x64.zip`（免安装）
+- macOS：`dsh-pet-<版本>-mac-arm64.zip`
+- Linux：`dsh-pet-<版本>-linux-x64.zip`
 
 **从源码运行**：
 

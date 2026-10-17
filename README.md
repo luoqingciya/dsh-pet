@@ -20,7 +20,7 @@
 
 ### 方式一：安装版（Windows）
 
-到 [Releases](https://github.com/luoqingciya/dsh-pet/releases) 下载 `dsh-pet-setup-<版本>.exe`，
+到 [Releases](https://github.com/luoqingciya/dsh-pet/releases) 下载 `dsh-pet-<版本>-win-x64-setup.exe`，
 双击安装。装到当前用户目录（`%LOCALAPPDATA%\Programs\dsh-pet`），不需要管理员权限，
 开始菜单与桌面都有快捷方式。
 
@@ -28,7 +28,8 @@
 
 ### 方式二：免安装版（全平台）
 
-下载对应平台的压缩包，解压到任意**可写**目录（包里是一个 `dsh-pet/` 文件夹，整个放过去即可）后：
+下载对应平台的压缩包（`dsh-pet-<版本>-<平台>-<架构>.zip`），解压到任意**可写**目录
+（包里是一个 `dsh-pet/` 文件夹，整个放过去即可）后：
 
 - Windows：双击 `dsh-pet.exe`
 - macOS：双击压缩包里的 `Electron.app`（包内可执行文件已改名为 `dsh-pet`；想让它显示成
@@ -278,7 +279,7 @@ dsh-pet.exe（Electron 主进程）
 npm run build           # 构建 lib（主进程 / 启动器 / 设置页 + 桌面共享核心）
 npm run app             # 构建并启动
 npm run app:package     # 免安装 zip 的内容目录：dist/dsh-pet-app/
-npm run app:installer   # Windows 安装包（NSIS）：dist/installer/dsh-pet-setup-<版本>.exe
+npm run app:installer   # Windows 安装包（NSIS）：dist/installer/dsh-pet-<版本>-win-x64-setup.exe
 npm run app:smoke       # 端到端冒烟（需要应用已在运行）
 npm test                # 单元测试
 ```

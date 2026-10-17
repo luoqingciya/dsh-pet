@@ -19,7 +19,17 @@
  * 用法：npm run app:package [-- --out dist/my-app]
  */
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
@@ -61,6 +71,30 @@ const APP_DIRS = [
 ];
 /** 单文件资源 */
 const APP_FILES = [join('assets', 'config.jsonc'), join('assets', 'logo.png')];
+
+/**
+ * 裁掉用不到的语言包。
+ *
+ * Electron 自带 55 个 `locales/*.pak`（约 47MB），一个中文桌宠只需要 zh-CN 与 en-US。
+ * Windows 走 electron-builder 时由 `electronLanguages` 处理；这里对"拷运行时"的路径补一刀，
+ * 两条路径都裁到只剩两个（幂等：已经裁过再跑无副作用）。
+ */
+function pruneLocales(dir) {
+  const keep = new Set(['zh-CN.pak', 'en-US.pak']);
+  const locales = join(dir, 'locales');
+  if (!existsSync(locales)) return;
+  let removed = 0;
+  for (const file of readdirSync(locales)) {
+    if (keep.has(file)) continue;
+    try {
+      unlinkSync(join(locales, file));
+      removed += 1;
+    } catch {
+      /* 删不掉就留着，不影响运行 */
+    }
+  }
+  if (removed > 0) console.log(`[package-app] 裁掉 ${removed} 个语言包（保留 zh-CN / en-US）`);
+}
 
 /** 写使用说明 */
 function writeReadme(out) {
@@ -163,6 +197,7 @@ function main() {
   const payload = PLAT === 'win32' ? buildWindowsPayload(source) : undefined;
   if (payload) {
     cpSync(payload, out, { recursive: true });
+    pruneLocales(out);
     writeReadme(out);
     console.log('[package-app] 完成（含图标）。启动：' + join(out, APP_EXE));
     return;
@@ -210,6 +245,7 @@ function main() {
     'utf8',
   );
 
+  pruneLocales(out);
   writeReadme(out);
   console.log('[package-app] 完成。启动：' + (PLAT === 'win32' ? join(out, APP_EXE) : out));
 }

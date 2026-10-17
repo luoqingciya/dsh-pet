@@ -14,7 +14,16 @@
  * 数据目录是应用自己的 `app.getPath('userData')`。
  */
 import { app, BrowserWindow, Menu, Notification, Tray, nativeImage, shell } from 'electron';
-import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join } from 'node:path';
 
 import { apply } from '../host/index';
@@ -96,14 +105,25 @@ process.env.DSH_PET_ELECTRON_PATH = process.execPath;
  *
  * 桌面应用的 stdout 在 Windows 上**没有终端可看**（双击启动时根本没有控制台），
  * 一旦主进程在启动阶段抛错，用户只会看到一个系统错误框、没有任何可复制的内容。
- * 因此把关键节点与异常追加到 `<数据目录>/dsh-pet/app.log`：用户遇到问题时把这份文件
+ * 因此把关键节点与异常追加到 `<数据目录>/dsh-pet/app.log`（超过 1MB 滚成 app.log.1，
+ * 只留一代）：用户遇到问题时把这份文件
  * 发出来即可，不必教他们怎么从命令行启动。
  */
+/** 日志文件上限：超过就滚成 app.log.1（只留一代），避免长期运行无限增长 */
+const LOG_MAX_BYTES = 1024 * 1024;
+
 function appendLog(line: string): void {
   try {
     const dir = petDataDir();
     mkdirSync(dir, { recursive: true });
-    appendFileSync(join(dir, 'app.log'), `${new Date().toISOString()} ${line}\n`, 'utf8');
+    const file = join(dir, 'app.log');
+    // 超过上限就滚成 app.log.1（只留一代）：长时间运行 + Helper 反复重启时日志会一直长
+    try {
+      if (statSync(file).size > LOG_MAX_BYTES) renameSync(file, `${file}.1`);
+    } catch {
+      /* 文件还不存在 / 正被占用：直接追加即可 */
+    }
+    appendFileSync(file, `${new Date().toISOString()} ${line}\n`, 'utf8');
   } catch {
     /* 日志写不进去不能反过来影响启动 */
   }

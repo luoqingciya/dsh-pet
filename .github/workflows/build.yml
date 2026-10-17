@@ -57,6 +57,13 @@ jobs:
           cache-dependency-path: dsh-pet/package-lock.json
       - run: npm ci
       - run: npm run build
+      # 产物文件名带版本号（dsh-pet-<版本>-<平台>-<架构>.zip），方便归档与区分新旧包
+      - name: Read version
+        id: ver
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "v=$VERSION" >> "$GITHUB_OUTPUT"
       # 下 Electron 运行时。**不用 `npm i electron`**：那个包的 postinstall 在 CI 里会被跳过
       # （实测 "added 3 packages in 1s"，dist/ 根本没下载），于是打包步骤找不到运行时。
       # 走应用自己的 ensure-electron（@electron/get + SHA256 校验），与用户首次启动同一条路径。
@@ -84,13 +91,13 @@ jobs:
         shell: pwsh
         run: |
           Copy-Item -Recurse -Force dist/dsh-pet-app dist/dsh-pet
-          Compress-Archive -Path dist/dsh-pet -DestinationPath dist/dsh-pet-${{ matrix.suffix }}.zip
+          Compress-Archive -Path dist/dsh-pet -DestinationPath dist/dsh-pet-${{ steps.ver.outputs.v }}-${{ matrix.suffix }}.zip
       - name: Archive (macOS / Linux)
         if: runner.os != 'Windows'
         run: |
           cd dist
           cp -r dsh-pet-app dsh-pet
-          zip -qry dsh-pet-${{ matrix.suffix }}.zip dsh-pet
+          zip -qry dsh-pet-${{ steps.ver.outputs.v }}-${{ matrix.suffix }}.zip dsh-pet
       - uses: actions/upload-artifact@v4
         with:
           name: dsh-pet-${{ matrix.suffix }}
