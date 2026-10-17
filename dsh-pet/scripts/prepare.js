@@ -61,9 +61,8 @@ const keep = [
   'assets/memes',
   'assets/config.jsonc',
   'assets/logo.png',
-  // 打包与 Electron 下载脚本（app:package / ensure:electron 要用）
+  // 打包脚本（app:package 要用）；Electron 下载工具在 lib/ensure-electron.js，随 lib 发布
   'scripts/package-app.mjs',
-  'scripts/ensure-electron.mjs',
   // 双击启动脚本
   'dsh-pet.cmd',
   'dsh-pet.sh',

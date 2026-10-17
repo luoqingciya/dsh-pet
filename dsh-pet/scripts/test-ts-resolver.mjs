@@ -8,13 +8,15 @@
  *    alias 换掉、类型期由 tsconfig 的 paths 换掉；测试期必须走**同一份**替身，否则 CI（没有这些
  *    包）会在 import 阶段就崩，本地有包时又会测到另一套实现。
  *
- * 三处映射必须同步：tsdown.config.mjs 的 alias、tsconfig.json 的 paths、本文件。
+ * 映射本身不在这里维护：tsconfig.json 的 paths 是唯一事实来源，tsdown 与本文件都从
+ * scripts/shims.mjs 读它（改一处即三处生效）。
  */
-const SHIMS = {
-  '@deepseek-ai/dsh-home-paths': new URL('../src/app/shims/dsh-home-paths.ts', import.meta.url).href,
-  '@deepseek-ai/dsh-credentials': new URL('../src/app/shims/dsh-credentials.ts', import.meta.url).href,
-  '@deepseek-ai/dsh-llm': new URL('../src/app/shims/dsh-llm.ts', import.meta.url).href,
-};
+import { pathToFileURL } from 'node:url';
+
+import { loadShims } from './shims.mjs';
+
+/** 包名 → file:// URL（来源见 scripts/shims.mjs：tsconfig 的 paths 是唯一事实来源） */
+const SHIMS = Object.fromEntries(Object.entries(loadShims()).map(([name, file]) => [name, pathToFileURL(file).href]));
 
 export async function resolve(specifier, context, nextResolve) {
   const shim = SHIMS[specifier];

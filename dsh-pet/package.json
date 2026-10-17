@@ -48,7 +48,6 @@
     "assets/config.jsonc",
     "assets/logo.png",
     "scripts/package-app.mjs",
-    "scripts/ensure-electron.mjs",
     "dsh-pet.cmd",
     "dsh-pet.sh"
   ],
@@ -56,7 +55,7 @@
     "bundle": "tsdown",
     "build:desktop-core": "node scripts/build-desktop-core.mjs",
     "watch": "tsdown --watch",
-    "ensure:electron": "node scripts/ensure-electron.mjs",
+    "ensure:electron": "node lib/ensure-electron.js",
     "start:desktop": "node scripts/start-desktop.mjs",
     "build": "node scripts/prepare.js",
     "prepack": "npm run build && npm run typecheck && npm run lint && npm run format:check && node scripts/prepack-check.js && npm run check:openapi",

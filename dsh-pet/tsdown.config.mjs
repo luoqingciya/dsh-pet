@@ -15,11 +15,16 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'tsdown';
 
+import { loadShims } from './scripts/shims.mjs';
+
 /** 本配置文件所在目录（= 包根） */
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)));
 
-/** 替换包名用的绝对路径（rolldown 的 alias 收绝对路径最稳） */
-const shim = (name) => join(packageRoot, 'src', 'app', 'shims', `${name}.ts`);
+/**
+ * `@deepseek-ai/*` 的替身映射：唯一来源是 tsconfig.json 的 paths（见 scripts/shims.mjs）。
+ * tsdown 的 alias 收绝对路径最稳，这里把相对 paths 解析成绝对路径。
+ */
+const SHIMS = loadShims();
 
 /** 主进程与启动器共用的编译口径 */
 const shared = {
@@ -46,10 +51,10 @@ export default defineConfig([
       /^@deepseek-ai\/(?!dsh-home-paths$|dsh-credentials$|dsh-llm$)/,
     ],
     alias: {
-      '@deepseek-ai/dsh-home-paths': shim('dsh-home-paths'),
-      '@deepseek-ai/dsh-credentials': shim('dsh-credentials'),
-      '@deepseek-ai/dsh-llm': shim('dsh-llm'),
-      '@electron/get': shim('electron-get'),
+      ...SHIMS,
+      // @electron/get 不在 tsconfig paths 里（它在 node_modules 里，类型正常），
+      // 但便携包不能带 node_modules，所以构建期换成替身
+      '@electron/get': join(packageRoot, 'src', 'app', 'shims', 'electron-get.ts'),
     },
     outputOptions: { entryFileNames: '[name].cjs' },
   },
@@ -57,6 +62,13 @@ export default defineConfig([
     ...shared,
     entry: { 'app-launch': 'src/app/launch.ts' },
     // 启动器跑在普通 Node 里（node_modules 在），@electron/get 保持外部引用即可
+    external: [/^@electron\//, /^node:/, /^@deepseek-ai\//],
+  },
+  {
+    // 命令行工具：把 Electron 下到 $DSH_HOME/electron（CI 与用户手动修复都用它）。
+    // 只是 helper-process.ts 里 ensureElectronDownload 的薄包装，不再有第二份下载实现。
+    ...shared,
+    entry: { 'ensure-electron': 'src/app/ensure-electron.ts' },
     external: [/^@electron\//, /^node:/, /^@deepseek-ai\//],
   },
   {
