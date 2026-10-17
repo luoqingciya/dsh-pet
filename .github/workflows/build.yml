@@ -77,12 +77,20 @@ jobs:
           # Runner 在 GitHub 网络内，直接走官方源（脚本默认的 npmmirror 是给国内本地构建用的）
           ELECTRON_BUILDER_BINARIES_MIRROR: https://github.com/electron-userland/electron-builder-binaries/releases/download/
         run: npm run app:installer
+      # 两个平台都打成「一个 dsh-pet/ 目录」：Windows 的 Compress-Archive 传 `*` 会把 20 个文件
+      # 摊在压缩包根目录，解压后散一地；和 mac/linux 的包结构也不一致。
       - name: Archive (Windows)
         if: runner.os == 'Windows'
-        run: Compress-Archive -Path dist/dsh-pet-app/* -DestinationPath dist/dsh-pet-${{ matrix.suffix }}.zip
+        shell: pwsh
+        run: |
+          Copy-Item -Recurse -Force dist/dsh-pet-app dist/dsh-pet
+          Compress-Archive -Path dist/dsh-pet -DestinationPath dist/dsh-pet-${{ matrix.suffix }}.zip
       - name: Archive (macOS / Linux)
         if: runner.os != 'Windows'
-        run: cd dist && zip -qry dsh-pet-${{ matrix.suffix }}.zip dsh-pet-app
+        run: |
+          cd dist
+          cp -r dsh-pet-app dsh-pet
+          zip -qry dsh-pet-${{ matrix.suffix }}.zip dsh-pet
       - uses: actions/upload-artifact@v4
         with:
           name: dsh-pet-${{ matrix.suffix }}
