@@ -793,22 +793,10 @@ app.whenReady().then(() => {
 
   // 右键菜单「打开网站」：交给**系统默认浏览器**打开（等效于网页里 Ctrl+点击链接新标签页），
   // 不建专属窗口——宠物窗口机制是透明小窗，不该承载常规网页浏览。URL 由渲染端从
-  // configUrl 推导 = DSH webServer 端口，端口变化自动跟随
+  // 打开设置页：地址由宿主经 query 注入（ORIGIN = 本地服务 origin，端口变了自动跟随），
+  // 这里只负责交给系统默认浏览器。
   const openSite = (url) => {
-    // 宿主注入的已鉴权站点 URL（含本进程启动令牌）：DSH 只在 `GET /` 接受它并换发绑定 authority 的
-    // 浏览器 Cookie，裸 origin 在默认浏览器里必然 401（#87）。令牌等价登录态，所以**只在与目标同
-    // origin 时**才启用——绝不让它被带去别的站点；取不到该变量（旧宿主 / standalone / 手写
-    // start-desktop）时，行为与以前完全一致。
-    let target = url;
-    const authed = process.env.DSH_PET_SITE_URL || '';
-    if (/^https?:[/][/]/.test(authed)) {
-      try {
-        if (new URL(authed).origin === new URL(url).origin) target = authed;
-      } catch {
-        /* 形状不对：保持裸地址（原行为） */
-      }
-    }
-    shell.openExternal(target).catch((error) => {
+    shell.openExternal(url).catch((error) => {
       console.error('[dsh-pet-desktop-helper] openExternal failed:', error);
     });
   };
