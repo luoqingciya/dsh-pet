@@ -1,24 +1,21 @@
-"""Transcode step03 masters into 360x360 playback thumbnails (step04).
+"""Transcode step03 masters into 640x360 playback variants (step04).
 
-素材处理链的第 4 步（转码）：把归一化后的 1200x1200 透明母版（step03/）
-转成 360x360 播放变体（step04/），供 dsh-pet 插件运行时使用。
+素材处理链的第 4 步（转码）：把归一化后的 2160x1215 透明母版（step03/）
+转成 640x360 的 VP9-alpha 播放变体（step04/），供应用运行时使用。
 
-完整处理链（与 crop_step01.py / chroma_step02.py / normalize_step03.py 同级）：
-  step01（原始视频）→ crop_step01.py → chroma_step02.py（绿幕抠像）
-  → step02（透明 810x720）→ normalize_step03.py（归一化 1200x1200 统一站立）
-  → step03（母版）→ 本脚本 → step04（360x360 播放变体）
+完整处理链：
+  源视频（video/）→ watermark_step01.py（水印遮罩）→ step01
+  → chroma_step02.py（绿幕抠像）或 pr_import_step02.py（PR 手工抠像）→ step02（透明）
+  → normalize_step03.py（归一化到 2160x1215 统一站立居中）→ step03（母版）
+  → 本脚本 → step04（640x360 播放变体）
 
-step04 是素材处理链的最终产物。发布/安装插件时把 step04 的内容
-同步到 dsh-pet/assets/thumb/（npm 包需要自包含的播放资源）。
+step04 是素材处理链的最终产物：把它同步到 dsh-pet/assets/webm/ 即为应用里的动画
+（右键「重载配置」后生效）。
 
 为什么需要转码：
-- 播放时宠物只显示约 260px，360 分辨率已足够清晰，1200 是 4.6 倍冗余
-- 1200 全量 172MB 超过 npm 包体积上限；转码后仅 ~10MB，可以发布
-- 播放更省内存、切换更快
-
-双轨设计：
-- thumb（本脚本产物，360x360，step04）→ 同步进 npm 包 assets/thumb/，运行时播放
-- full（step03 原始 1200x1200）→ 不进 npm 包，发布到 GitHub Releases 存档
+- 桌面宠物窗口最宽也就几百 px，640 宽足够清晰；2160 母版对播放是纯冗余
+- 母版单段几十 MB，转码后整包 106 段约 53MB，才适合随程序分发
+- 播放更省内存、切换更快（双缓冲交叉淡入不吃帧）
 """
 
 from __future__ import annotations

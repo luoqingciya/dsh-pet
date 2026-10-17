@@ -9,15 +9,10 @@
 
 一只住在桌面上的**透明置顶桌宠**：待机呼吸、随机小动作（打瞌睡、玩魔方、涮火锅……）、
 左右转向、屏幕漫游、点击 Q 弹、拖拽甩抛反弹、右键点播——一百余段手绘风透明动画随时无缝衔接。
-它还能查余额、按心情碎碎念、陪你聊两句，窗口失焦时弹系统通知。
+它还能查余额、按心情碎碎念、陪你聊两句，回话完成或余额告急时弹系统通知。
 
-**不依赖任何 Agent 框架**：不需要 DeepSeek Harness、不需要浏览器、不需要登录，双击就能跑。
-
-<p>
-  <img src="assets/screenshots/dsh-pet-running-1.png" width="300" alt="运行效果">
-  <img src="assets/screenshots/dsh-pet-running-2.png" width="300" alt="运行效果">
-  <img src="assets/screenshots/dsh-pet-running-3.png" width="300" alt="运行效果">
-</p>
+**不依赖任何 Agent 框架**：不需要 DeepSeek Harness、不需要登录，装好就能跑；
+设置页是应用内的独立窗口，也允许用浏览器打开（排障时方便）。
 
 ---
 
@@ -36,7 +31,8 @@
 下载对应平台的压缩包，解压到任意**可写**目录后：
 
 - Windows：双击 `dsh-pet.exe`
-- macOS：双击 `dsh-pet.app`
+- macOS：双击压缩包里的 `Electron.app`（包内可执行文件已改名为 `dsh-pet`；想让它显示成
+  `dsh-pet.app` 可以自己重命名整个 bundle）
 - Linux：运行 `./dsh-pet`
 
 **数据就在解压目录下的 `data/`**：整个目录拷走即迁移，删掉即卸载干净。
@@ -52,7 +48,7 @@ npm install
 npm run app
 ```
 
-首次启动会自动下载一份 Electron 到 `~/.dsh/electron`（约 200MB，只下一次）。
+首次启动会自动下载一份 Electron 到 `~/.dsh/electron`（约 350MB，只下一次；打包版已自带，不需要下载）。
 `npm run app` 会先构建再启动，改完代码重跑即可。源码态的数据放在 Electron 的用户目录
 （`%APPDATA%\dsh-pet`），与打包版互不干扰。
 
@@ -74,7 +70,7 @@ Windows 直接双击仓库里的 `dsh-pet.cmd`；macOS / Linux 运行 `./dsh-pet
 - **屏幕漫游**：朝朝向方向行走，先探测空间、不走出屏幕（多屏按各屏边界判定）
 - **点击 / 拖拽 / 甩抛**：点击有回应动画并 Q 弹挤压；拖拽弹簧跟手，甩出即抛物线飞行、屏幕边缘反弹、
   落地摩擦停稳；多只宠物之间还能互相撞开
-- **右键菜单**：动作 → 分类 → 具体动画任意点播；工具项：碎碎念 / 对话 / 查看余额 / 回到初始位置 / 重载配置
+- **右键菜单**：动作 → 分类 → 具体动画任意点播；工具项：打开设置 / 查看余额 / 碎碎念 / 对话 / 回到初始位置 / 重载配置
 - **余额展示**：按已用百分比分档播动画 + 头顶气泡（DeepSeek 余额 / OpenCode Zen Go 与 Command Code 的额度窗口）
 - **碎碎念与对话**：按周期自动生成一句；右键随时开口；对话有记忆（落盘、重启不丢）
 - **工作状态**：它回话时切「思考 → 成功 / 出错」，常驻气泡
@@ -165,7 +161,7 @@ Windows 直接双击仓库里的 `dsh-pet.cmd`；macOS / Linux 运行 `./dsh-pet
 
 ### 加动作
 
-把 VP9-alpha 编码的透明 `.webm` 放进数据目录的 `main-animation/webm/`，重启后右键菜单即可点播；
+把 VP9-alpha 编码的透明 `.webm` 放进数据目录的 `main-animation/webm/`，右键「重载配置」后即可点播；
 想让它在随机链里出现，在 `config.jsonc` 的 `animations` 里加个名字。
 
 ### 加宠物种类（pet pack）
@@ -177,7 +173,7 @@ Windows 直接双击仓库里的 `dsh-pet.cmd`；macOS / Linux 运行 `./dsh-pet
 ```
 
 扫描 `pet/` 自动发现，桌面同时生效；一个种类文件可放任意多只实例，共享同一套素材。
-设置页只列出主宠物，文件宠物改完刷新即生效。
+设置页只列出主宠物；文件宠物改完右键「重载配置」即生效。
 
 ---
 
@@ -231,7 +227,7 @@ dsh-pet.exe（Electron 主进程）
    ├─ secrets.json        API Key（0600）
    ├─ memory.json         对话记忆
    ├─ app.log             运行日志（排障时先看它）
-   ├─ main-animation/     自定义动画
+   ├─ main-animation/webm/  自定义动画（VP9-alpha .webm）
    └─ pet/                额外宠物种类
 ```
 
@@ -268,7 +264,7 @@ dsh-pet.exe（Electron 主进程）
 2. `scripts/` 里的 Python 管线：水印遮罩 → 绿幕抠像（或 PR 手工抠像）→ 归一化 → 转码 640×360 VP9-alpha
 3. 产物放进 `dsh-pet/assets/webm/`，再在 `config.jsonc` 的 `animations` 里登记名字
 
-源视频体积大，不随仓库发布；Releases 提供 `assets-videos.zip`。
+源视频体积大，不随仓库发布（本仓库的 Release 只提供程序包，不含源视频）——自己生成即可，生成链脚本与提示词都在仓库里。
 
 ---
 

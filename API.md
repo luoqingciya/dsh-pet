@@ -15,7 +15,7 @@ dsh-pet 在本地 `127.0.0.1` 上起了一个 HTTP 服务，把所有能力挂�
 | --- | --- |
 | `GET /dsh-pet-7340/state` | **轮询唯一数据源**：一次拿到说话、工作状态、系统通知、余额四类状态；另带 `configVersion`（配置版本指纹，变了就该重拉 `/config`） |
 | `GET /dsh-pet-7340/config` | 读合并后的成品配置（内置默认 + 用户层，字段已填满） |
-| `GET /dsh-pet-7340/config/meta` | 配置文件路径、各类数据落盘位置、卸载该用哪个 profile |
+| `GET /dsh-pet-7340/config/meta` | 配置文件路径、各类数据落盘位置（设置页「存储」区用的就是它） |
 | `GET /dsh-pet-7340/models` | 可用服务商与模型清单（来自「本地服务」里配置的端点） |
 | `GET /dsh-pet-7340/chat?pet=` | 读某只桌宠最近的对话记忆窗口 |
 
@@ -35,7 +35,7 @@ dsh-pet 在本地 `127.0.0.1` 上起了一个 HTTP 服务，把所有能力挂�
 | 接口 | 功能 |
 | --- | --- |
 | `PUT /dsh-pet-7340/config` | 保存用户层配置（白名单重建，用户手写的精调字段会保留） |
-| `POST /dsh-pet-7340/pet-display` | **改单只宠物的显示位置**（`web` / `desktop` / `both` / `none`）：只传 `{ id, display }`，**不必回传整段 pets**——写哪一层（主配置还是 `pet/<前缀>-config.json`）由宿主按 id 反查；两端右键菜单「显示位置」走的就是它。返回改动后的成品聚合 |
+| `POST /dsh-pet-7340/pet-display` | **改单只宠物的显示位置**（`desktop` 显示 / `none` 隐藏；`both` 等价 desktop、`web` 等价 none，只为兼容旧配置）：只传 `{ id, display }`，**不必回传整段 pets**——写哪一层（主配置还是 `pet/<前缀>-config.json`）由宿主按 id 反查。返回改动后的成品聚合 |
 | `POST /dsh-pet-7340/config` | 用内置默认整份覆盖用户配置，即「恢复默认」 |
 
 ## 四、素材
@@ -52,8 +52,10 @@ dsh-pet 在本地 `127.0.0.1` 上起了一个 HTTP 服务，把所有能力挂�
 
 1. **数据只有一个出口**：`GET /state`。它返回宿主内存里的已发布状态，每个状态位是
    `{ counter, data }`。
-2. **动作端点不返回数据**：上表第二节与第三节的 `POST` 只回 `{ ok: true }`，表示"动作做完了"；
-   结果写进状态，调用方随后拉一拍 `/state` 即可看到（立刻补拉就是 0 延迟，不必等下一个轮询周期）。
+2. **动作端点不返回数据**：`whisper` / `broadcast` / `anim` / `chat` / `balance` / `reload` 只回
+   `{ ok: true }`，表示"动作做完了"；结果写进状态，调用方随后拉一拍 `/state` 即可看到
+   （立刻补拉就是 0 延迟，不必等下一个轮询周期）。配置写接口（`PUT`/`POST /config`、
+   `POST /pet-display`）例外：它们直接返回改动后的成品聚合。
 3. **`counter` 变了才渲染**：它是 `Date.now()` 且严格递增，宿主重启也不会倒退。
    状态位的路径（如 `sections.balance`、`pets.<id>.say`）请当作**不透明键**使用——
    宠物 id 允许含点号，**不要按 `.` 切分**。

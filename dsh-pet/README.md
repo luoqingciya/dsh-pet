@@ -10,17 +10,21 @@
 
 ## 安装与运行
 
+**从 Releases 下载**（推荐）：
+
+- Windows：`dsh-pet-setup-<版本>.exe`（安装版）或 `dsh-pet-win-x64.zip`（免安装）
+- macOS：`dsh-pet-mac-arm64.zip`
+- Linux：`dsh-pet-linux-x64.zip`
+
+**从源码运行**：
+
 ```sh
-npm i -g dsh-pet
-dsh-pet                 # 首次会下载一份 Electron 到 ~/.dsh/electron
-dsh-pet --port 3100     # 指定本地服务端口（默认 7340，被占用会自动顺延）
+npm install
+npm run app                  # 首次会下载一份 Electron 到 ~/.dsh/electron（约 350MB）
+npm run app -- --port 7500   # 换端口（默认 7340；被占用会自动顺延，一般不用指定）
 ```
 
-或者不装全局：
-
-```sh
-npx dsh-pet
-```
+> 本仓库尚未发布到 npm；npm 上的 `dsh-pet` 是上游的旧版插件，不要用它代替这里的程序。
 
 ## 设置
 
@@ -34,7 +38,7 @@ API Key 存在本机 `secrets.json`（权限 0600），只写不读、不回显�
 
 ## 数据目录
 
-通过 `npx` / 全局安装运行时，数据放在 Electron 的用户目录（Windows `%APPDATA%\dsh-pet`，
+通过 `npm run app` 从源码运行时，数据放在 Electron 的用户目录（Windows `%APPDATA%\dsh-pet`，
 macOS `~/Library/Application Support/dsh-pet`，Linux `~/.config/dsh-pet`）。
 
 **安装包与免安装 zip 的数据在程序自己的目录下**（`<安装目录>/data`），整个目录拷走即迁移。

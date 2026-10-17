@@ -107,7 +107,7 @@ paths:
 
         - `sections` 是**全局**段，所有端共享一份；`pets.<id>` 是**每只宠物**各自一份。
         - **`configVersion` 不是叶子**（没有 `counter`/`data`，不参与 counter 比对）：它是配置文件的
-          版本指纹，与上一拍不同就说明配置被改过——桌面端右键改了显示位置、另一个页面保存了配置、
+          版本指纹，与上一拍不同就说明配置被改过——设置页保存了配置、调过 `POST /pet-display`、
           或用户手工编辑了 `main-config.jsonc` / `pet/*.json`。消费端此时应重拉 `GET /config`。
           老版本宿主不带该字段（`undefined`），按"无从判断"处理即可，不要误触发重拉。
         - 叶子 `data` 为 `null` 表示"从未写过"（此时 `counter` 为 `0`）；消费端应跳过它。
@@ -206,9 +206,8 @@ paths:
         并显示。宿主侧其他插件（例如"女仆"巡检插件想在巡检完替主人说一句）用它把文本送进
         桌宠气泡，桌宠就成了那套人格的实体。
 
-        文本写进 `pets.<id>.say` —— 与碎碎念、对话回复**同一个叶子**，因此浏览器与桌面两端
-        在 1 秒内自动显示，**消费端无需改动**。这是动作端点，只回 `{ ok }`，文本本身从
-        `/state` 读。
+        文本写进 `pets.<id>.say` —— 与碎碎念、对话回复**同一个叶子**，桌面窗口在 1 秒内
+        自动显示，**消费端无需改动**。这是动作端点，只回 `{ ok }`，文本本身从 `/state` 读。
 
         **校验**（任何一条不通过都返回 HTTP 200 + `ok: false`，与 `POST /chat` 口径一致）：
 
@@ -285,9 +284,9 @@ paths:
       operationId: playAnimation
       summary: 点播动画——让桌宠播一段指定动画
       description: |
-        效果与**右键菜单里点「动作」树完全一致**：两端都复用同一个菜单动作处理函数
-        （浏览器 `handleMenuAction` / 桌面 `sprite.onMenuAction`），所以镜像修正（文字类朝右时
-        先强制朝左）、移动类走真实位移、其余播一遍这些语义天然一致。
+        效果与**右键菜单里点「动作」树完全一致**：走的是同一个菜单动作处理函数
+        （桌面 `sprite.onMenuAction`），所以镜像修正（文字类朝右时先强制朝左）、
+        移动类走真实位移、其余播一遍这些语义天然一致。
 
         名字写进 `pets.<id>.anim`，消费端在 1 秒内轮询发现 `counter` 变化后换源播放。
         **动画名即素材文件名**（`/dsh-pet-7340/thumb/<素材根>/<名字>.webm`），所以名字必须是
@@ -381,8 +380,8 @@ paths:
       description: |
         返回该宠物的最近若干轮对话（**一次性读取，不是轮询**），供对话弹窗打开时回填历史。
 
-        记忆的唯一读写方是宿主（落盘在 `memory.json`），浏览器与桌面两端都只是客户端，
-        因此桌面窗口与设置页**天然共享同一份记忆**。文件全量保留、不删除，
+        记忆的唯一读写方是宿主（落盘在 `memory.json`），桌面窗口与设置页都只是客户端，
+        因此**天然共享同一份记忆**。文件全量保留、不删除，
         只是响应时按 `chatMemoryRounds`（默认 5 轮，1 轮 = 1 问 1 答）截取尾部。
       parameters:
         - $ref: "#/components/parameters/PetIdQuery"
@@ -467,7 +466,7 @@ paths:
         返回**合并成品**：内置默认（`assets/config.jsonc`）与用户层
         （`<数据目录>/dsh-pet/main-config.jsonc`）深度合并后的结果，
         每个条目的字段都已填满（动画池、权重、物理参数、工作状态文案等），
-        浏览器/桌面/设置页直接消费，**无需任何校验或兜底**。
+        桌面窗口与设置页直接消费，**无需任何校验或兜底**。
 
         顶层键是"条目名"（`main`、`test1`……），不是数组。
 
@@ -625,7 +624,7 @@ paths:
         按宠物 id 改它的 `display`，并返回改动后的成品聚合（与 `GET /config` 同一份）。
 
         这是 `PUT /config` 的**单只快捷形式**：调用方不必回传整段 `pets[]`（那既容易误伤同层
-        其它宠物，也要自己判断该写哪一层）。桌面端与浏览器端的右键菜单「显示位置」都走它。
+        其它宠物，也要自己判断该写哪一层）。给脚本/第三方按宠物切显示位置时用它。
 
         **层归属由宿主反查，调用方不要传**：`id` 在合并后是**全局唯一**的（`mergePet` 会跳过
         重复实例），宿主用 `findPetInstance` 定位后按条目归属决定写哪个文件——`main` 条目写
@@ -719,14 +718,13 @@ paths:
                     description: 用户动画素材根目录绝对路径
                   storage:
                     type: array
-                    description: 全部落盘位置（用户数据 / Electron 运行时 / 桌面端缓存 / 下载缓存 / 插件本体）
+                    description: 全部落盘位置（用户数据 / Electron 运行时 / 桌面端缓存 / 下载缓存 / 程序本体）
                     items:
                       $ref: "#/components/schemas/StorageEntry"
                   profile:
                     type: string
                     description: |
-                      历史字段（DSH 插件时期用于拼接卸载命令），本地应用恒为空串
-                      `dsh plugin --profile <名> remove dsh-pet`。反推不出时为空串。
+                      历史字段（早期版本用于拼接卸载命令），当前恒为空串。
 
   /dsh-pet-7340/models:
     get:
@@ -1365,7 +1363,7 @@ components:
           description: |
             可选配图**名称**（不是 URL）：配置 `memes` 的键，也就是该图文件的文件名（不含扩展名）。
             仅在配置开启了 `whisperImageEnabled` / `chatImageEnabled` 且命中池内图片时出现。
-            消费端（浏览器 / 桌面）按素材根拼成 `/dsh-pet-7340/pic/memes/<素材根>/<名>.png`
+            消费端（桌面窗口）按素材根拼成 `/dsh-pet-7340/pic/memes/<素材根>/<名>.png`
             取图，素材根 = 该宠物的条目 key（`assetRoot`）。
 
     Counter:
@@ -1483,7 +1481,9 @@ components:
         display:
           type: string
           enum: [web, desktop, both, none]
-          description: 显示在哪：仅浏览器 / 仅桌面 / 两者 / 都不显示
+          description: |
+            显示位置。本应用只有桌面窗口：`desktop` = 显示，`none` = 不显示；
+            `both` 与 `desktop` 等价，`web` 等价于 `none`（保留这两个取值只为兼容旧配置）。
         position:
           $ref: "#/components/schemas/Position"
 
