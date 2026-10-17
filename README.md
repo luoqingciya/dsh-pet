@@ -103,7 +103,7 @@ Windows 直接双击仓库里的 `dsh-pet.cmd`；macOS / Linux 运行 `./dsh-pet
 | 服务商 | DeepSeek 官方 / Ollama（本机）/ OpenAI / 阿里云百炼（通义千问）/ 自定义（OpenAI 兼容） |
 | 模型 | 如 `deepseek-flash`、`deepseek-v4-pro`、`qwen-plus`、`qwen2.5:7b`；留空则从端点的 `/models` 自动拉取 |
 | 接口地址 | OpenAI 兼容根地址（不带 `/chat/completions`） |
-| API Key | 存在本机 `secrets.json`（权限 0600），只写不读、不回显 |
+| API Key | 存在本机 `secrets.json`，**用系统密钥加密**（Windows DPAPI / macOS 钥匙串 / Linux libsecret）；只写不读、不回显 |
 | 余额服务商 | 默认跟随模型服务商，也可单独指定（对话走 Ollama、余额查 DeepSeek） |
 | 通知 | 对话回复 / 余额告急 |
 
@@ -228,7 +228,7 @@ dsh-pet.exe（Electron 主进程）
 └─ dsh-pet/
    ├─ main-config.jsonc   桌宠配置（大小 / 位置 / 动画池 / 权重 / 物理 / 字体 / 人设）
    ├─ app-config.json     本地服务配置（服务商 / 模型 / 端点 / 通知开关）
-   ├─ secrets.json        API Key（0600）
+   ├─ secrets.json        API Key（系统密钥加密）
    ├─ memory.json         对话记忆
    ├─ app.log             运行日志（排障时先看它）
    ├─ .initialized        首次运行标记（删掉它，下次启动会重新弹设置窗）

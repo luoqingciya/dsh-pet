@@ -14,6 +14,7 @@ import { chmodSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSy
 import { dirname } from 'node:path';
 
 import { appConfigFile, secretsFile } from './paths';
+import { openSecret, sealSecret } from './secrets';
 
 /** 一个 OpenAI 兼容端点（一个端点 = 一个 provider id） */
 export interface AppEndpoint {
@@ -256,7 +257,8 @@ export function readSecrets(): SecretMap {
     for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
       if (typeof value !== 'string') continue;
       const name = key.trim();
-      const text = value.trim();
+      // 落盘值可能是密文（enc:v1:…），也可能是升级前的明文；解不开按"未配置"处理
+      const text = openSecret(value.trim());
       if (name && text) out[name] = text;
     }
     return out;
@@ -287,7 +289,10 @@ export function saveSecrets(input: unknown): SecretMap {
       if (text) next[name] = text;
     }
   }
-  writeJsonAtomic(secretsFile(), next, 0o600);
+  // 落盘时加密（系统支持的话）；内存里始终是明文，调用方无感
+  const sealed: SecretMap = {};
+  for (const [name, value] of Object.entries(next)) sealed[name] = sealSecret(value);
+  writeJsonAtomic(secretsFile(), sealed, 0o600);
   return next;
 }
 

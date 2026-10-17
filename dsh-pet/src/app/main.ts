@@ -13,7 +13,7 @@
  * 边界：运行期不 import 任何 `@deepseek-ai/*`（构建期由 alias 换成 `src/app/shims/*` 的替身），
  * 数据目录是应用自己的 `app.getPath('userData')`。
  */
-import { app, BrowserWindow, Menu, Notification, Tray, nativeImage, shell } from 'electron';
+import { app, BrowserWindow, Menu, Notification, Tray, nativeImage, safeStorage, shell } from 'electron';
 import {
   appendFileSync,
   existsSync,
@@ -33,6 +33,7 @@ import { createAppContext } from './context';
 import { readAppConfig, readSecrets } from './local-config';
 import type { LlmService } from './llm-openai';
 import { migrateLegacyData, petDataDir } from './paths';
+import { encryptionAvailable, setSecretCodec } from './secrets';
 import { startNotifyWatcher } from './notifications';
 import { createWebUi } from './web-ui';
 
@@ -466,6 +467,14 @@ if (GOT_LOCK) {
 
   app.whenReady().then(async () => {
     try {
+      // 密钥加密：safeStorage 要在 app ready 之后才可靠（Linux 需要密钥环就绪）。
+      // 不支持的环境（无密钥环）会退化成明文落盘，日志里说明一次。
+      setSecretCodec({
+        available: () => safeStorage.isEncryptionAvailable(),
+        encrypt: (plain) => safeStorage.encryptString(plain).toString('base64'),
+        decrypt: (encoded) => safeStorage.decryptString(Buffer.from(encoded, 'base64')),
+      });
+      appendLog(`[secrets] 加密落盘：${encryptionAvailable() ? 'on' : 'off（系统不支持，明文保存）'}`);
       await bootstrap();
     } catch (error) {
       const text = error instanceof Error ? (error.stack ?? error.message) : String(error);

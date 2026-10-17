@@ -292,7 +292,8 @@ export function LocalPanel(): React.ReactElement {
       <div className="card">
         <h2>API Key</h2>
         <p className="hint">
-          保存在本机 <code>secrets.json</code>（权限 0600），不会上传。已配置的密钥不回显，留空表示不修改。
+          保存在本机 <code>secrets.json</code>，用系统密钥加密（Windows DPAPI / macOS 钥匙串），不会上传。
+          已配置的密钥不回显，留空表示不修改。
         </p>
         {keyNames.length === 0 ? <p className="hint">当前端点不需要密钥。</p> : null}
         {keyNames.map((name) => (

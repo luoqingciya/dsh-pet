@@ -101,6 +101,16 @@ declare module 'electron' {
     on(event: 'click', listener: () => void): void;
   }
 
+  /**
+   * 系统级加密（Windows DPAPI / macOS Keychain / Linux libsecret）。
+   * 用来给落盘的 API Key 加密：密文绑定当前用户，换机器/换账号解不开。
+   */
+  export const safeStorage: {
+    isEncryptionAvailable(): boolean;
+    encryptString(plainText: string): Buffer;
+    decryptString(encrypted: Buffer): string;
+  };
+
   export const shell: {
     openPath(path: string): Promise<string>;
     openExternal(url: string): Promise<void>;

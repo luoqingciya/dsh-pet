@@ -34,7 +34,7 @@ npm run app -- --port 7500   # 换端口（默认 7340；被占用会自动顺�
 - **本地服务**：模型服务商（DeepSeek 官方 / Ollama / OpenAI / 阿里云百炼 / 任意 OpenAI 兼容端点）、
   API Key、余额服务商、通知开关
 
-API Key 存在本机 `secrets.json`（权限 0600），只写不读、不回显。
+API Key 存在本机 `secrets.json`，用系统密钥加密（Windows DPAPI / macOS 钥匙串 / Linux libsecret）；只写不读、不回显。
 
 ## 数据目录
 
