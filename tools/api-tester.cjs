@@ -58,10 +58,17 @@ const MIME = {
   '.ico': 'image/x-icon',
 };
 
-/** 转发一个请求到宿主，并把响应（含 CORS 头）回给浏览器 */
+/** 转发一个请求到宿主，并把响应回给浏览器 */
 function forward(req, res) {
   const target = `http://127.0.0.1:${hostPort}${req.url}`;
+  // 这个代理在**服务端**转发，对宿主而言它就是本机脚本（没有 Origin）。
+  // 浏览器的 Origin / Referer / Sec-Fetch-* 必须剥掉：宿主从 0.9.1 起会拒绝跨站请求，
+  // 而代理的端口和宿主不同源，原样转发会被 403。
   const headers = { ...req.headers, host: `127.0.0.1:${hostPort}` };
+  for (const name of ['origin', 'referer']) delete headers[name];
+  for (const name of Object.keys(headers)) {
+    if (name.startsWith('sec-fetch-')) delete headers[name];
+  }
 
   const upstream = http.request(target, { method: req.method, headers }, (up) => {
     // 转发时保留上游的 content-type 等，再叠 CORS；源站没给 content-length 也不影响（chunked 照传）

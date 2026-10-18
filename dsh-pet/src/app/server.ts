@@ -9,6 +9,15 @@
  *   4. 提供 `/health`（运维/探活）与 `/shutdown`（脚本化停机）；
  *   5. 兜住 handler 的异常，回 500 JSON。
  *
+ * **安全边界（0.9.1）**：这个端口上没有鉴权，所以必须挡住"别人网页里的 JS"。
+ * 从前对所有响应发 `access-control-allow-origin: *` 并放行 OPTIONS 预检，于是任意网站都能
+ * 跨域 `POST /app/api/config` 把 `endpoints[].baseUrl` 改成自己的地址，再触发一次生成，
+ * 用户的 API Key 就随 `Authorization: Bearer` 发出去了。现在：
+ *   - 不再发任何 CORS 头（设置页同源，不需要；跨域读直接失败）；
+ *   - `Host` 必须是回环名（防 DNS rebinding：evil.com 解析到 127.0.0.1 时 Host 仍是 evil.com）；
+ *   - 带 `Origin` 的请求必须与 `Host` 同源；`Origin: null`（file:// 页面）只放行只读方法。
+ * 不带 `Origin` 的客户端（curl / IDE 插件 / CI / Node 脚本）照旧放行——它们本来就有本机权限。
+ *
  * 为什么服务要存在（而不是让主进程直接和渲染端 IPC）：桌面透明窗渲染端与第三方脚本
  * 都用同一套 HTTP 契约（`/dsh-pet-7340/*`，见仓库根 `API.md`）；把它做成真实 HTTP，
  * 桌宠就同时是一个可被脚本驱动的实体，而不只是应用里的一个窗口。
@@ -61,12 +70,48 @@ export interface AppServer {
   close(): Promise<void>;
 }
 
-const CORS_HEADERS: Record<string, string> = {
-  'access-control-allow-origin': '*',
-  'access-control-allow-methods': 'GET, POST, PUT, OPTIONS',
-  'access-control-allow-headers': 'content-type',
-  'access-control-max-age': '600',
-};
+/**
+ * 回环主机名判定（`Host` 头去掉端口后比较）。
+ * 只认 127.0.0.1 / localhost / [::1]：DNS rebinding 攻击里，页面域名解析到 127.0.0.1，
+ * 但浏览器发出的 `Host` 仍是攻击者域名，这一条就能拦住。
+ */
+function isLoopbackHost(host: string): boolean {
+  const name = host.toLowerCase().replace(/:\d+$/, '');
+  return name === '127.0.0.1' || name === 'localhost' || name === '[::1]';
+}
+
+/**
+ * 跨站请求判定：返回拒绝原因，`undefined` 表示放行。
+ *
+ * 规则（见文件头的安全边界）：
+ *   1. `Host` 必须是回环名；
+ *   2. 没有 `Origin` → 放行（curl / IDE 插件 / CI / Node 脚本，本来就具备本机权限）；
+ *   3. 有 `Origin` → 必须与 `Host` 同源（端口顺延后依然成立，因为两边都取自同一个请求）；
+ *   4. 例外：`Origin: null` 且是只读方法（独立开发模式下渲染端是 `file://` 页面）。
+ *
+ * 导出以便单测直接喂假请求，不必起 socket。
+ */
+export function crossSiteReason(req: { method?: string; headers: Record<string, unknown> }): string | undefined {
+  const host = String(req.headers.host ?? '');
+  if (!host) return '缺少 Host 头';
+  if (!isLoopbackHost(host)) return `只接受本机访问（Host: ${host}）`;
+
+  const rawOrigin = req.headers.origin;
+  if (rawOrigin === undefined) return undefined;
+  const origin = String(rawOrigin);
+
+  try {
+    const parsed = new URL(origin);
+    if (parsed.protocol === 'http:' && parsed.host.toLowerCase() === host.toLowerCase()) return undefined;
+  } catch {
+    /* Origin 不是合法 URL（典型是字符串 "null"）：落到下面按跨站处理 */
+  }
+
+  const method = (req.method ?? 'GET').toUpperCase();
+  if (origin === 'null' && (method === 'GET' || method === 'HEAD')) return undefined;
+
+  return `跨站请求被拒绝（Origin: ${origin}）`;
+}
 
 /** 只取 pathname（不解码，避免 %2F 一类输入在校验之前被改写）；非法 URL 落回 '/' */
 function pathnameOf(rawUrl: string | undefined): string {
@@ -87,7 +132,6 @@ function sendJson(res: ServerResponse, status: number, body: unknown, headers: R
   res.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
     'content-length': Buffer.byteLength(payload),
-    ...CORS_HEADERS,
     ...headers,
   });
   res.end(payload);
@@ -97,7 +141,6 @@ function sendText(res: ServerResponse, status: number, body: string): void {
   res.writeHead(status, {
     'content-type': 'text/plain; charset=utf-8',
     'content-length': Buffer.byteLength(body),
-    ...CORS_HEADERS,
   });
   res.end(body);
 }
@@ -121,9 +164,18 @@ export function createRequestListener(options: AppServerOptions): (req: Incoming
     const pathname = pathnameOf(req.url);
     logger.debug(`${method} ${pathname}`);
 
+    // 预检：**不再回 CORS 头**——跨域预检因此失败，真正的请求根本发不出去
     if (method === 'OPTIONS') {
-      res.writeHead(204, CORS_HEADERS);
+      res.writeHead(204);
       res.end();
+      return;
+    }
+
+    // 跨站请求一律 403（见 crossSiteReason 的规则）
+    const crossSite = crossSiteReason(req);
+    if (crossSite) {
+      logger.warn(`${method} ${pathname} 被拒：${crossSite}`);
+      sendJson(res, 403, { error: crossSite });
       return;
     }
 

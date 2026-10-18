@@ -108,6 +108,18 @@ curl -s -X POST "$BASE/work-status" \
 `GET|POST /app/api/autostart`），同样不在 OpenAPI 契约里——
 它们是这个应用的内部界面，不是给第三方用的稳定接口。
 
+### 访问边界：只服务本机，不服务"别人的网页"
+
+服务只监听 `127.0.0.1`，并且**不向浏览器页面开放跨域访问**（0.9.1 起）：
+
+- 不发任何 CORS 头，跨域预检直接失败；
+- 带 `Origin` 的请求必须与 `Host` 同源（`Origin: null` 的 `file://` 页面只放行只读方法）；
+- `Host` 必须是 `127.0.0.1` / `localhost`（防 DNS rebinding）。
+
+**不带 `Origin` 的客户端照旧放行**：`curl`、IDE 插件、CI、Node/Python 脚本都不受影响，
+`README` 里"任何脚本都能点亮它"依然成立。只有"浏览器里另一个站点的页面"被挡在门外——
+那正是能把 API Key 骗走的唯一入口。
+
 ## 相关
 
 - [`openapi.yaml`](openapi.yaml) —— 完整契约（OpenAPI 3.1，可直接导入 Swagger UI / Postman）
