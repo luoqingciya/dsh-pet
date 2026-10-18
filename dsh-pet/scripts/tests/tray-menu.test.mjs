@@ -16,24 +16,15 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { _electron } from 'playwright';
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const executablePath = process.env.DSH_PET_ELECTRON;
-const PORT = 7422;
+import { electronExe, freePort, root, waitFor } from './_harness.mjs';
 
-async function waitFor(check, timeoutMs = 15000, stepMs = 200) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (await check()) return true;
-    await new Promise((r) => setTimeout(r, stepMs));
-  }
-  return false;
-}
+const executablePath = electronExe();
 
 test('自绘托盘菜单：弹出、尺寸、点「退出」', { skip: !executablePath, timeout: 90000 }, async () => {
+  const PORT = await freePort();
   const profile = mkdtempSync(join(tmpdir(), 'dsh-pet-tray-'));
   const env = { ...process.env, DSH_PET_APP_PORT: String(PORT), DSH_PET_UPDATE_DELAY_MS: '600000' };
   delete env.ELECTRON_RUN_AS_NODE;

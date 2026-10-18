@@ -9,31 +9,16 @@
 //   DSH_PET_ELECTRON=<一份 electron 可执行文件> npm run test:ui
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createServer } from 'node:http';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { _electron } from 'playwright';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const executablePath = process.env.DSH_PET_ELECTRON;
-const PORT = 7417;
-const MOCK_PORT = 18095; // 与 prompt-cache(18098) / app-smoke(18099) 错开，避免并行跑时抢端口
+import { electronExe, launchApp, listenMock, waitFor } from './_harness.mjs';
 
-/** 等条件成立（最多 timeoutMs） */
-async function waitFor(check, timeoutMs = 15000, stepMs = 200) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (await check()) return true;
-    await new Promise((r) => setTimeout(r, stepMs));
-  }
-  return false;
-}
+const executablePath = electronExe();
 
 test('版本检查提示 + 设置页模型建议', { skip: !executablePath, timeout: 120000 }, async (t) => {
   // mock：版本接口（返回一个远高于当前的版本）+ 模型清单接口
-  const mock = createServer((req, res) => {
+  const mock = await listenMock((req, res) => {
     if (req.url === '/latest') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ tag_name: 'v99.0.0', html_url: 'https://example.com/download' }));
@@ -46,23 +31,15 @@ test('版本检查提示 + 设置页模型建议', { skip: !executablePath, time
     }
     res.writeHead(404).end();
   });
-  await new Promise((done) => mock.listen(MOCK_PORT, '127.0.0.1', done));
 
-  const profile = mkdtempSync(join(tmpdir(), 'dsh-pet-update-'));
-  const env = {
-    ...process.env,
-    // 版本检查指向本地 mock（默认是 api.github.com，测试不能依赖外网）
-    DSH_PET_UPDATE_API: `http://127.0.0.1:${MOCK_PORT}/latest`,
-    // 首次检查的延迟从 15s 压到 0.4s，否则这个用例要干等
-    DSH_PET_UPDATE_DELAY_MS: '400',
-  };
-  delete env.ELECTRON_RUN_AS_NODE;
-  delete env.DSH_PET_APP_PORT;
-
-  const app = await _electron.launch({
-    executablePath,
-    args: [join(root, 'lib', 'app-main.cjs'), `--user-data-dir=${profile}`, '--port', String(PORT)],
-    env,
+  const { app, base, profile } = await launchApp({
+    tag: 'update',
+    env: {
+      // 版本检查指向本地 mock（默认是 api.github.com，测试不能依赖外网）
+      DSH_PET_UPDATE_API: `${mock.base}/latest`,
+      // 首次检查的延迟从 15s 压到 0.4s，否则这个用例要干等
+      DSH_PET_UPDATE_DELAY_MS: '400',
+    },
   });
 
   try {
@@ -81,7 +58,7 @@ test('版本检查提示 + 设置页模型建议', { skip: !executablePath, time
 
     await t.test('设置页「模型」输入框拿到端点 /models 的建议', async () => {
       // 先把端点指向 mock（这样 host 的 /models 才拉得到清单）
-      await fetch(`http://127.0.0.1:${PORT}/app/api/config`, {
+      await fetch(`${base}/app/api/config`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -93,7 +70,7 @@ test('版本检查提示 + 设置页模型建议', { skip: !executablePath, time
               {
                 id: 'custom',
                 name: 'mock',
-                baseUrl: `http://127.0.0.1:${MOCK_PORT}/v1`,
+                baseUrl: `${mock.base}/v1`,
                 apiKeyRef: '',
                 models: [],
               },
@@ -163,7 +140,7 @@ test('版本检查提示 + 设置页模型建议', { skip: !executablePath, time
 
 test('设置里关掉自动检查 → 完全不发那次请求', { skip: !executablePath, timeout: 60000 }, async () => {
   let hits = 0;
-  const mock = createServer((req, res) => {
+  const mock = await listenMock((req, res) => {
     if (req.url === '/latest') {
       hits += 1;
       res.writeHead(200, { 'content-type': 'application/json' });
@@ -172,54 +149,38 @@ test('设置里关掉自动检查 → 完全不发那次请求', { skip: !execut
     }
     res.writeHead(404).end();
   });
-  await new Promise((done) => mock.listen(MOCK_PORT + 1, '127.0.0.1', done));
 
-  const profile = mkdtempSync(join(tmpdir(), 'dsh-pet-noupdate-'));
-  // 预写配置：自动检查关闭（首次启动没有配置文件时读的是默认值 true）
-  const dir = join(profile, 'dsh-pet');
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(
-    join(dir, 'app-config.json'),
-    JSON.stringify({
-      version: 1,
-      provider: 'custom',
-      model: 'mock-a',
-      balanceProvider: '',
-      endpoints: [{ id: 'custom', name: 'mock', baseUrl: 'http://127.0.0.1:9/v1', apiKeyRef: '', models: ['mock-a'] }],
-      notify: { chatReply: true, balanceAlert: true },
-      updateCheck: false,
-    }),
-    'utf8',
-  );
-
-  const env = {
-    ...process.env,
-    DSH_PET_UPDATE_API: `http://127.0.0.1:${MOCK_PORT + 1}/latest`,
-    DSH_PET_UPDATE_DELAY_MS: '300',
-  };
-  delete env.ELECTRON_RUN_AS_NODE;
-  delete env.DSH_PET_APP_PORT;
-
-  const app = await _electron.launch({
-    executablePath,
-    args: [join(root, 'lib', 'app-main.cjs'), `--user-data-dir=${profile}`, '--port', String(PORT + 1)],
-    env,
+  const { app, profile } = await launchApp({
+    tag: 'noupdate',
+    env: { DSH_PET_UPDATE_API: `${mock.base}/latest`, DSH_PET_UPDATE_DELAY_MS: '300' },
+    // 预写配置：自动检查关闭（首次启动没有配置文件时读的是默认值 true）
+    prepare: (dir) => {
+      const data = join(dir, 'dsh-pet');
+      mkdirSync(data, { recursive: true });
+      writeFileSync(
+        join(data, 'app-config.json'),
+        JSON.stringify({
+          version: 1,
+          provider: 'custom',
+          model: 'mock-a',
+          balanceProvider: '',
+          endpoints: [
+            { id: 'custom', name: 'mock', baseUrl: 'http://127.0.0.1:9/v1', apiKeyRef: '', models: ['mock-a'] },
+          ],
+          notify: { chatReply: true, balanceAlert: true },
+          updateCheck: false,
+        }),
+        'utf8',
+      );
+    },
   });
 
   try {
-    // 等到服务就绪 + 首检延迟过去，再确认一次请求都没发
-    const up = await waitFor(
-      () =>
-        fetch(`http://127.0.0.1:${PORT + 1}/health`)
-          .then((r) => r.ok)
-          .catch(() => false),
-      20000,
-    );
-    assert.ok(up, '应用应当正常启动');
+    // 服务就绪已由 launchApp 保证；再等过首检延迟，确认一次请求都没发
     await new Promise((r) => setTimeout(r, 2000));
     assert.equal(hits, 0, '关掉自动检查后不得向版本接口发任何请求');
 
-    const logFile = join(dir, 'app.log');
+    const logFile = join(profile, 'dsh-pet', 'app.log');
     if (existsSync(logFile)) {
       assert.ok(!readFileSync(logFile, 'utf8').includes('[update]'), '日志里不该出现更新检查的记录');
     }

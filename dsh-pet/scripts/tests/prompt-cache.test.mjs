@@ -13,32 +13,15 @@
 //   DSH_PET_ELECTRON=<一份 electron 可执行文件> npm run test:ui
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createServer } from 'node:http';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { _electron } from 'playwright';
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const executablePath = process.env.DSH_PET_ELECTRON;
-/** 等条件成立（最多 timeoutMs） */
-async function waitFor(check, timeoutMs = 15000, stepMs = 200) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (await check()) return true;
-    await new Promise((r) => setTimeout(r, stepMs));
-  }
-  return false;
-}
+import { electronExe, launchApp, listenMock, waitFor } from './_harness.mjs';
 
-const PORT = 7416;
-const MOCK_PORT = 18098;
+const executablePath = electronExe();
 
 test('prompt cache 前缀稳定 + --port 生效', { skip: !executablePath, timeout: 90000 }, async () => {
   /** 录下来的请求体（每次 /v1/chat/completions 一条） */
   const bodies = [];
-  const mock = createServer((req, res) => {
+  const mock = await listenMock((req, res) => {
     let raw = '';
     req.on('data', (chunk) => (raw += chunk));
     req.on('end', () => {
@@ -57,32 +40,16 @@ test('prompt cache 前缀稳定 + --port 生效', { skip: !executablePath, timeo
       res.end('data: [DONE]\n\n');
     });
   });
-  await new Promise((done) => mock.listen(MOCK_PORT, '127.0.0.1', done));
 
-  const profile = mkdtempSync(join(tmpdir(), 'dsh-pet-cache-'));
-  const env = { ...process.env };
-  delete env.ELECTRON_RUN_AS_NODE;
   // 端口只用 --port 传（不设环境变量）：顺带验证打包版也认这个命令行开关
-  delete env.DSH_PET_APP_PORT;
-
-  const app = await _electron.launch({
-    executablePath,
-    args: [join(root, 'lib', 'app-main.cjs'), `--user-data-dir=${profile}`, '--port', String(PORT)],
-    env,
-  });
+  const { app, port, base } = await launchApp({ tag: 'cache', portEnv: false });
 
   try {
-    let health;
-    for (let i = 0; i < 60 && !health; i += 1) {
-      health = await fetch(`http://127.0.0.1:${PORT}/health`)
-        .then((r) => r.json())
-        .catch(() => null);
-      if (!health) await new Promise((r) => setTimeout(r, 250));
-    }
-    assert.equal(health?.port, PORT, '--port 必须生效（环境变量没设，端口只能来自 argv）');
+    const health = await fetch(`${base}/health`).then((r) => r.json());
+    assert.equal(health?.port, port, '--port 必须生效（环境变量没设，端口只能来自 argv）');
 
     // 把模型端点指向 mock（临时 profile，不影响任何真实配置）
-    await fetch(`http://127.0.0.1:${PORT}/app/api/config`, {
+    await fetch(`${base}/app/api/config`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -94,7 +61,7 @@ test('prompt cache 前缀稳定 + --port 生效', { skip: !executablePath, timeo
             {
               id: 'custom',
               name: 'mock',
-              baseUrl: `http://127.0.0.1:${MOCK_PORT}/v1`,
+              baseUrl: `${mock.base}/v1`,
               apiKeyRef: '',
               models: ['mock-1'],
             },
@@ -104,9 +71,9 @@ test('prompt cache 前缀稳定 + --port 生效', { skip: !executablePath, timeo
       }),
     });
 
-    await fetch(`http://127.0.0.1:${PORT}/dsh-pet-7340/whisper?pet=main`, { method: 'POST' });
+    await fetch(`${base}/dsh-pet-7340/whisper?pet=main`, { method: 'POST' });
     for (const text of ['第一句话', '第二句话']) {
-      await fetch(`http://127.0.0.1:${PORT}/dsh-pet-7340/chat?pet=main`, {
+      await fetch(`${base}/dsh-pet-7340/chat?pet=main`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ text }),

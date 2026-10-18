@@ -12,32 +12,17 @@
 //   DSH_PET_ELECTRON=<一份 electron 可执行文件> npm run test:ui
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { _electron } from 'playwright';
+import { electronExe, launchApp, waitFor } from './_harness.mjs';
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const executablePath = process.env.DSH_PET_ELECTRON;
-const PORT = 7426;
-
-async function waitFor(check, timeoutMs = 15000, stepMs = 200) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (await check()) return true;
-    await new Promise((r) => setTimeout(r, stepMs));
-  }
-  return false;
-}
+const executablePath = electronExe();
 
 /** 读/写自启状态（走设置页用的同一套接口） */
-async function autoStart(enabled) {
+async function autoStart(base, enabled) {
   if (enabled === undefined) {
-    const res = await fetch(`http://127.0.0.1:${PORT}/app/api/autostart`);
+    const res = await fetch(`${base}/app/api/autostart`);
     return (await res.json()).state;
   }
-  const res = await fetch(`http://127.0.0.1:${PORT}/app/api/autostart`, {
+  const res = await fetch(`${base}/app/api/autostart`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ enabled }),
@@ -46,26 +31,11 @@ async function autoStart(enabled) {
 }
 
 test('开机自启：设置页开关能真的改系统状态', { skip: !executablePath, timeout: 90000 }, async () => {
-  const profile = mkdtempSync(join(tmpdir(), 'dsh-autostart-'));
-  const env = { ...process.env, DSH_PET_APP_PORT: String(PORT), DSH_PET_UPDATE_DELAY_MS: '600000' };
-  delete env.ELECTRON_RUN_AS_NODE;
-
-  const app = await _electron.launch({
-    executablePath,
-    args: [join(root, 'lib', 'app-main.cjs'), `--user-data-dir=${profile}`, '--port', String(PORT)],
-    env,
-  });
+  const { app, base } = await launchApp({ tag: 'autostart', env: { DSH_PET_UPDATE_DELAY_MS: '600000' } });
 
   let initial;
   try {
-    const up = await waitFor(() =>
-      fetch(`http://127.0.0.1:${PORT}/health`)
-        .then((r) => r.ok)
-        .catch(() => false),
-    );
-    assert.ok(up, '本地服务应当起来');
-
-    initial = await autoStart();
+    initial = await autoStart(base);
     assert.equal(initial.supported, true, `本平台应支持开机自启（实际：${JSON.stringify(initial)}）`);
     assert.ok(initial.target, '必须能说清写到哪儿（设置页要展示）');
     // 源码态的登录命令必须带主进程脚本：只注册 electron.exe 的话，登录后是个没有任何窗口的空壳。
@@ -97,7 +67,7 @@ test('开机自启：设置页开关能真的改系统状态', { skip: !executab
 
     // ② 勾上 → 系统里真的是 true
     await box.click();
-    const turnedOn = await waitFor(async () => (await autoStart()).enabled === true, 15000);
+    const turnedOn = await waitFor(async () => (await autoStart(base)).enabled === true, 15000);
     assert.ok(turnedOn, '勾上之后 /app/api/autostart 必须回报 enabled=true');
     const fromMain = await app.evaluate(
       ({ app: electronApp }) => electronApp.getLoginItemSettings({ path: process.execPath, args: [] }).openAtLogin,
@@ -108,12 +78,12 @@ test('开机自启：设置页开关能真的改系统状态', { skip: !executab
 
     // ③ 还原：回到测试开始前的状态
     await box.click();
-    const restored = await waitFor(async () => (await autoStart()).enabled === initial.enabled, 15000);
+    const restored = await waitFor(async () => (await autoStart(base)).enabled === initial.enabled, 15000);
     assert.ok(restored, '取消勾选后必须回到测试前的状态');
   } finally {
     // 万一上面中途断言失败，这里兜底恢复，别给开发机留下一条自启项
     if (initial) {
-      await autoStart(initial.enabled).catch(() => {});
+      await autoStart(base, initial.enabled).catch(() => {});
     }
     await app.close().catch(() => {});
   }

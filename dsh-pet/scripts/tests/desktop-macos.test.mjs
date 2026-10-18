@@ -8,8 +8,10 @@ import { fileURLToPath } from 'node:url';
 import { join, basename } from 'node:path';
 import { _electron } from 'playwright';
 
+import { electronExe } from './_harness.mjs';
+
 const root = fileURLToPath(new URL('../../', import.meta.url));
-const executablePath = process.env.DSH_PET_ELECTRON;
+const executablePath = electronExe();
 
 test(
   'macOS desktop: native geometry, HiDPI menu and click-through recovery',

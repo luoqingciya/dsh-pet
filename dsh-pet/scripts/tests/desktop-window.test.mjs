@@ -10,36 +10,16 @@
 // 无显示环境（纯 CLI 的 Linux）会被跳过。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { _electron } from 'playwright';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const executablePath = process.env.DSH_PET_ELECTRON;
+import { electronExe, launchApp, waitFor } from './_harness.mjs';
 
-/** 等一个条件成立（最多 timeoutMs），返回是否成立 */
-async function waitFor(check, timeoutMs = 15000, intervalMs = 250) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (await check()) return true;
-    await new Promise((r) => setTimeout(r, intervalMs));
-  }
-  return false;
-}
+const executablePath = electronExe();
 
 test('desktop window: 渲染端拿到配置、画出宠物、视频真的在播', { skip: !executablePath, timeout: 90000 }, async (t) => {
-  // 独立 profile：不碰用户真实配置，也不会撞单实例锁
-  const profile = mkdtempSync(join(tmpdir(), 'dsh-pet-ui-'));
-  const env = { ...process.env, DSH_PET_APP_PORT: '7411' };
-  delete env.ELECTRON_RUN_AS_NODE;
-
-  const app = await _electron.launch({
-    executablePath,
-    args: [join(root, 'lib', 'app-main.cjs'), `--user-data-dir=${profile}`],
-    env,
-  });
+  // 独立 profile + 独立端口：不碰用户真实配置，也不会撞单实例锁
+  const { app, profile } = await launchApp({ tag: 'ui' });
 
   try {
     // 首次启动会同时开设置窗与宠物窗，按标题挑出宠物窗

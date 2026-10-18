@@ -65,7 +65,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test:ui": "node --test scripts/tests/*.test.mjs",
+    "test:ui": "node --test --test-timeout=120000 --test-concurrency=1 scripts/tests/*.test.mjs",
     "app": "npm run bundle && npm run build:desktop-core && node lib/app-launch.js",
     "app:package": "node scripts/package-app.mjs",
     "app:smoke": "node scripts/app-smoke.mjs",
