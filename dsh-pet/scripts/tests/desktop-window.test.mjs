@@ -10,7 +10,7 @@
 // 无显示环境（纯 CLI 的 Linux）会被跳过。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -159,6 +159,67 @@ test('desktop window: 渲染端拿到配置、画出宠物、视频真的在播'
         10000,
       );
       assert.ok(gone, '清空后气泡文案必须消失');
+    });
+    // 回归：对话弹窗必须显示最近记忆（`GET /chat` 的唯一消费方）。
+    // 从前这个接口一个调用方都没有——注释写着"弹窗打开时展示"，实际弹窗只有一个输入框，
+    // 「记忆轮数」这个设置在界面上没有任何可见出口。
+    await t.test('右键「对话」打开的弹窗顶部显示最近记忆', async () => {
+      const origin = await petPage.evaluate(() => new URL(CONFIG.configUrl).origin);
+      // host 读的是 /config/meta 里那个 user 文件所在目录下的 memory.json；
+      // 临时 profile 里没配 API Key（发不出真对话），直接写两条记忆模拟"聊过"。
+      const meta = await (await fetch(origin + '/dsh-pet-7340/config/meta')).json();
+      const dataRoot = dirname(String(meta.user));
+      mkdirSync(dataRoot, { recursive: true });
+      writeFileSync(
+        join(dataRoot, 'memory.json'),
+        JSON.stringify({
+          main: {
+            main: {
+              messages: [
+                { role: 'user', content: '在吗', ts: 1 },
+                { role: 'assistant', content: '在的在的', ts: 2 },
+              ],
+            },
+          },
+        }),
+        'utf8',
+      );
+
+      // 走用户真实路径（右键「对话」→ showChatFromMenu），不是直接 mount 组件：
+      // 它带 clamp 可视矩形与宠物自己的素材根，与手写调用不是同一条代码路径。
+      const opened = await petPage.evaluate(() => {
+        const sprite = sprites[0];
+        if (!sprite) return 'no-sprite';
+        sprite.showChatFromMenu();
+        return window.__dshPetDebug.chatOpen === true ? 'open' : 'not-open';
+      });
+      assert.equal(opened, 'open', '右键「对话」应打开弹窗');
+
+      const shown = await waitFor(
+        () => petPage.evaluate(() => document.querySelectorAll('.dsh-pet-chat-history .dsh-pet-chat-row').length === 2),
+        10000,
+      );
+      const info = await petPage.evaluate(() => {
+        const box = document.querySelector('.dsh-pet-chat')?.getBoundingClientRect();
+        return {
+          rows: Array.from(document.querySelectorAll('.dsh-pet-chat-history .dsh-pet-chat-row')).map(
+            (el) => el.textContent,
+          ),
+          inView: box
+            ? box.left >= 0 && box.top >= 0 && box.right <= window.innerWidth && box.bottom <= window.innerHeight
+            : false,
+          errors: (window.__dshPetDebug.errors ?? []).slice(0, 3),
+        };
+      });
+      assert.ok(shown, `历史必须显示在弹窗顶部（实际：${JSON.stringify(info.rows)}）`);
+      assert.deepEqual(info.rows, ['你：在吗', 'TA：在的在的'], '历史内容与顺序必须与 memory.json 一致');
+      assert.equal(info.inView, true, '弹窗（含历史）必须落在窗口内：历史是异步到达的，高度变了要重新夹回');
+      assert.deepEqual(info.errors, [], '渲染端不得记录错误');
+
+      // 再点一次关掉，避免影响后续用例
+      await petPage.evaluate(() => sprites[0].showChatFromMenu());
+      const closed = await waitFor(() => petPage.evaluate(() => window.__dshPetDebug.chatOpen === false), 5000);
+      assert.ok(closed, '再点「对话」应关掉弹窗');
     });
   } finally {
     await app.close().catch(() => {});
