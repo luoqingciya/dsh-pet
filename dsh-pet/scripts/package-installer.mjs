@@ -19,18 +19,13 @@ import { existsSync, readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { homedir } from 'node:os';
+
+import { resolveElectronRuntimeDir } from './electron-runtime-dir.mjs';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 
-/** 解析 Electron 运行时目录（与 package-app.mjs 同一套来源） */
-function electronDir() {
-  const explicit = process.env.DSH_PET_ELECTRON_DIR;
-  if (explicit && existsSync(explicit)) return explicit;
-  const home = process.env.DSH_HOME || join(process.env.USERPROFILE || process.env.HOME || homedir(), '.dsh');
-  const dir = join(home, 'electron');
-  return existsSync(dir) ? dir : undefined;
-}
+/** 解析 Electron 运行时目录（与 package-app.mjs / 运行时同一套口径） */
+const electronDir = () => resolveElectronRuntimeDir();
 
 function fail(message) {
   console.error(`[package-installer] ${message}`);
@@ -48,7 +43,9 @@ if (!existsSync(entry)) fail('缺少 lib/app-main.cjs，请先运行 npm run bui
 
 const electron = electronDir();
 if (!electron) {
-  fail('找不到 Electron 运行时。先运行一次应用（会下载到 $DSH_HOME/electron），或用 DSH_PET_ELECTRON_DIR 指定目录。');
+  fail(
+    '找不到 Electron 运行时。先运行一次 npm run app（会下载到用户缓存目录，见 scripts/electron-runtime-dir.mjs），或用 DSH_PET_ELECTRON_DIR 指定目录。',
+  );
 }
 
 const builder = join(

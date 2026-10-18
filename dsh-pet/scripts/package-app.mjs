@@ -32,19 +32,14 @@ import {
 } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { homedir } from 'node:os';
+
+import { resolveElectronRuntimeDir } from './electron-runtime-dir.mjs';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const PLAT = process.platform;
 
-/** 解析 Electron 运行时目录（开发态启动器用同一份缓存） */
-function electronDir() {
-  const explicit = process.env.DSH_PET_ELECTRON_DIR;
-  if (explicit && existsSync(explicit)) return explicit;
-  const home = process.env.DSH_HOME || join(process.env.USERPROFILE || process.env.HOME || homedir(), '.dsh');
-  const dir = join(home, 'electron');
-  return existsSync(dir) ? dir : undefined;
-}
+/** 解析 Electron 运行时目录（与运行时同一个口径，见 scripts/electron-runtime-dir.mjs） */
+const electronDir = () => resolveElectronRuntimeDir();
 
 /** 平台对应的 Electron 可执行文件名 */
 const EXE_NAME = PLAT === 'win32' ? 'electron.exe' : PLAT === 'darwin' ? 'Electron' : 'electron';
@@ -169,7 +164,8 @@ function main() {
   if (!source) {
     console.error(
       '[package-app] 找不到 Electron 运行时。\n' +
-        '  先运行一次桌面模式（会下载到 $DSH_HOME/electron），或用 DSH_PET_ELECTRON_DIR 指定目录。',
+        '  先运行一次 npm run app（会下载到用户缓存目录，见 scripts/electron-runtime-dir.mjs），\n' +
+        '  或用 DSH_PET_ELECTRON_DIR 指定目录。',
     );
     process.exit(1);
   }
