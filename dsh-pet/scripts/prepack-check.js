@@ -10,7 +10,8 @@
  *   5. 包体积上限（防误把母版/源视频塞进来）；
  *   6. 插件时代的字段必须已经清干净（dsh / peerDependencies / icon），否则会误导安装方式；
  *   7. 产物里不得出现 `@deepseek-ai/*`——项目已脱离 DSH，源码里若有人再 import，构建期会被
- *      当成 external 留下裸 require（启动即崩），这里提前拦住。
+ *      当成 external 留下裸 require（启动即崩），这里提前拦住；
+ *   8. `package.json` 与 `package-lock.json` 的版本号必须一致（0.9.0 之前 lock 停在 0.4.0 跨了五个版本）。
  *
  * 用法：node scripts/prepack-check.js
  */
@@ -188,5 +189,37 @@ const dshRefs = ['app-main.cjs', 'app-launch.js', 'app-settings.js', 'ensure-ele
 if (dshRefs.length > 0)
   fail(`产物里残留 @deepseek-ai/* 引用：${dshRefs.map((f) => f.slice(ROOT.length + 1)).join(', ')}`);
 else ok('产物无 @deepseek-ai/* 残留');
+
+// ---- 8. 版本号：package.json 与 package-lock.json 必须一致 ----
+// 0.9.0 之前 lock 里的 version 一直停在 0.4.0，跨了五个版本没人发现——因为没有任何东西读它。
+// 应用版本取自 package.json（main.ts 的 appVersion() 与 electron-builder 都读它），lock 那份是
+// npm 自己维护的副本；漂了不影响运行，但"这一版到底发了什么"就对不上了。
+const pkgVersion = typeof pkg.version === 'string' ? pkg.version : '';
+if (!/^\d+\.\d+\.\d+$/.test(pkgVersion)) {
+  fail(`package.json 的 version 不是 x.y.z（实际：${JSON.stringify(pkg.version)}）`);
+} else {
+  let lockVersions;
+  try {
+    const lock = JSON.parse(readFileSync(join(ROOT, 'package-lock.json'), 'utf8'));
+    // lockfileVersion 1 没有 packages 段，只有顶层 version
+    lockVersions = [
+      ['version', lock.version],
+      ['packages[""].version', lock.packages && lock.packages[''] ? lock.packages[''].version : undefined],
+    ].filter(([, value]) => value !== undefined);
+  } catch {
+    fail('package-lock.json 缺失或不是合法 JSON（npm ci 依赖它）');
+  }
+  if (lockVersions) {
+    const drifted = lockVersions.filter(([, value]) => value !== pkgVersion);
+    if (drifted.length > 0) {
+      fail(
+        `版本号不一致：package.json=${pkgVersion}，package-lock.json 的 ` +
+          `${drifted.map(([key, value]) => `${key}=${value}`).join('、')}（发版时请用 npm version 一起改）`,
+      );
+    } else {
+      ok(`版本号一致：${pkgVersion}`);
+    }
+  }
+}
 
 console.log(process.exitCode ? '[prepack-check] 未通过' : '[prepack-check] 全部通过');
