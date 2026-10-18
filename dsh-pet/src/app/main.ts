@@ -38,6 +38,7 @@ import { migrateLegacyData, petDataDir } from './paths';
 import { portFromArgv } from './port-arg';
 import { encryptionAvailable, setSecretCodec } from './secrets';
 import { startNotifyWatcher } from './notifications';
+import { checkForUpdate, RELEASES_PAGE } from './update-check';
 import { createWebUi } from './web-ui';
 
 // ---------- 应用身份与数据目录 ----------
@@ -226,6 +227,7 @@ let tray: Tray | undefined;
 let server: { port: number; close(): Promise<void> } | undefined;
 let context: ReturnType<typeof createAppContext> | undefined;
 let stopNotify: (() => void) | undefined;
+let stopUpdateCheck: (() => void) | undefined;
 let quitting = false;
 /** 服务实际端口（0 = 还没起来） */
 let port = 0;
@@ -295,6 +297,88 @@ function showNotification(title: string, body: string, iconName: string): void {
   notification.show();
 }
 
+/**
+ * 版本检查（「A 方案」：只提示 + 打开下载页，**不自动替换文件**）。
+ *
+ * 为什么不自动装：免安装版没有安装器（electron-builder 的 portable 目标官方不支持自动更新），
+ * Windows 又替换不了运行中的 exe——真要"一键升级"就得自己重写一个安装器，失败态（断电 /
+ * 杀软 / 权限）会留下"打不开的应用"，比手动解压糟得多。所以这里只做提示。
+ *
+ * 口径：
+ *   - 启动后延迟 {@link UPDATE_FIRST_DELAY_MS} 再查（别和启动抢带宽），之后每 12 小时一次；
+ *   - 自动检查**失败一律静默**（api.github.com 在国内经常不通，每次启动弹一句"检查失败"是纯打扰）；
+ *   - 托盘「检查更新」是手动触发：最新 / 有新版 / 失败都明确告知，失败时给下载页兜底；
+ *   - 设置里可以关掉自动检查（`updateCheck`），关掉就完全不发这个请求。
+ */
+const UPDATE_FIRST_DELAY_MS = 15_000;
+const UPDATE_INTERVAL_MS = 12 * 60 * 60 * 1000;
+
+/** 首次检查的延迟（`DSH_PET_UPDATE_DELAY_MS` 可覆盖：排障与运行时测试用，正常别动） */
+function updateFirstDelay(): number {
+  const raw = Number(process.env.DSH_PET_UPDATE_DELAY_MS);
+  return Number.isFinite(raw) && raw >= 0 ? raw : UPDATE_FIRST_DELAY_MS;
+}
+
+/** 手动触发入口（托盘菜单用；startUpdateCheck 未跑时为空） */
+let checkUpdateNow: ((manual: boolean) => void) | undefined;
+
+function startUpdateCheck(): () => void {
+  let stopped = false;
+  let busy = false;
+
+  const notify = (title: string, body: string, url?: string): void => {
+    if (!Notification.isSupported()) return;
+    const icon = notifyIcon('notify-done');
+    const notification = new Notification({ title, body, ...(icon ? { icon } : {}), silent: true });
+    if (url) {
+      notification.on('click', () => {
+        void shell.openExternal(url);
+      });
+    }
+    notification.show();
+  };
+
+  const run = async (manual: boolean): Promise<void> => {
+    if (stopped || busy) return;
+    // 自动检查受设置开关约束；手动点托盘永远执行（用户明确要了结果）
+    if (!manual && readAppConfig().updateCheck === false) return;
+    busy = true;
+    try {
+      const current = appVersion();
+      const result = await checkForUpdate({ current });
+      if (stopped) return;
+      if (result.kind === 'newer') {
+        appendLog(`[update] 发现新版本 ${result.version}（当前 ${current}）`);
+        notify('dsh-pet 有新版本', `v${result.version} 可以下载了（当前 v${current}），点此打开下载页`, result.url);
+        return;
+      }
+      if (result.kind === 'latest') {
+        appendLog(`[update] 已是最新（${result.version}）`);
+        if (manual) notify('dsh-pet 已是最新版本', `当前 v${current}`);
+        return;
+      }
+      appendLog(`[update] 检查失败：${result.message}`);
+      // 自动检查失败不打扰；手动检查失败要说清楚，并给一个能自己去看的落脚点
+      if (manual) notify('检查更新失败', `${result.message}。点此打开下载页手动看看`, RELEASES_PAGE);
+    } finally {
+      busy = false;
+    }
+  };
+
+  checkUpdateNow = (manual) => void run(manual);
+  const first = setTimeout(() => void run(false), updateFirstDelay());
+  const timer = setInterval(() => void run(false), UPDATE_INTERVAL_MS);
+  // 定时器不该拖住进程退出（应用退出时靠 dispose 收尾，不靠这里）
+  first.unref?.();
+  timer.unref?.();
+  return () => {
+    stopped = true;
+    checkUpdateNow = undefined;
+    clearTimeout(first);
+    clearInterval(timer);
+  };
+}
+
 /** 托盘：设置 / 重载配置 / 打开数据目录 / 退出 */
 function createTray(): void {
   const iconPath = join(PACKAGE_ROOT, 'assets', 'logo.png');
@@ -315,6 +399,14 @@ function createTray(): void {
             void fetch(`http://127.0.0.1:${port}/dsh-pet-7340/reload`, { method: 'POST' }).catch((error: unknown) =>
               log.warn(`重载配置失败：${error instanceof Error ? error.message : String(error)}`),
             );
+          },
+        },
+        {
+          label: '检查更新',
+          click: () => {
+            // 手动触发：不走 15 秒延迟，也不受设置里的自动检查开关约束
+            if (checkUpdateNow) checkUpdateNow(true);
+            else log.info('更新检查尚未就绪（应用还在启动），稍后再试');
           },
         },
         { type: 'separator' },
@@ -436,6 +528,8 @@ async function bootstrap(): Promise<void> {
   });
 
   createTray();
+  // 版本检查：延迟 15 秒查一次，之后每 12 小时一次（失败静默；设置里可关）
+  stopUpdateCheck = startUpdateCheck();
   // 只有首次运行才自动弹设置窗（引导填 API Key）；之后启动就是"点开就有宠物"，
   // 设置窗从托盘或右键菜单进——每次启动都糊一个设置窗在脸上不是桌宠该有的行为。
   if (isFirstRun()) openSettings();
@@ -471,6 +565,7 @@ if (IS_DPI_PROBE) {
     event.preventDefault();
     void (async () => {
       stopNotify?.();
+      stopUpdateCheck?.();
       // 先释放宿主的 effect（销毁桌面窗口、清定时器），再关服务
       await context?.dispose().catch(() => {});
       await server?.close().catch(() => {});

@@ -57,6 +57,13 @@ export interface AppConfig {
   balanceProvider: string;
   endpoints: AppEndpoint[];
   notify: AppNotifyConfig;
+  /**
+   * 启动后是否检查新版本（只提示 + 打开下载页，**不会**自动替换文件）。
+   *
+   * 默认 true。关掉它 = 完全不发这次网络请求（给在意出网行为、或网络环境访问不了
+   * api.github.com 的人一个干净的开关）。托盘「检查更新」是手动触发，不受这个开关影响。
+   */
+  updateCheck: boolean;
 }
 
 /**
@@ -116,6 +123,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   balanceProvider: '',
   endpoints: DEFAULT_ENDPOINTS,
   notify: { chatReply: true, balanceAlert: true },
+  updateCheck: true,
 };
 
 /** 已知可查余额的服务商（设置页「余额服务商」下拉框的数据源；与 host/balance 的注册表对齐） */
@@ -193,6 +201,8 @@ export function normalizeAppConfig(raw: unknown): AppConfig {
       chatReply: typeof notifyRaw.chatReply === 'boolean' ? notifyRaw.chatReply : true,
       balanceAlert: typeof notifyRaw.balanceAlert === 'boolean' ? notifyRaw.balanceAlert : true,
     },
+    // 缺失 = 默认开（新装用户应当知道有新版本）；显式 false 才关
+    updateCheck: typeof obj.updateCheck === 'boolean' ? obj.updateCheck : true,
   };
 }
 
@@ -314,6 +324,8 @@ export interface AppConfigView {
   balanceProvider: string;
   endpoints: Array<AppEndpoint & { keyConfigured: boolean; keyRef: string }>;
   notify: AppNotifyConfig;
+  /** 启动时检查新版本（设置页「更新」开关） */
+  updateCheck: boolean;
   /** 密钥名 → 是否已配置（含余额服务商要求的 key） */
   keys: Record<string, boolean>;
 }
@@ -333,6 +345,7 @@ export function configView(config: AppConfig = readAppConfig(), secrets: SecretM
       keyRef: endpoint.apiKeyRef,
     })),
     notify: { ...config.notify },
+    updateCheck: config.updateCheck,
     keys: Object.fromEntries([...keyNames].map((name) => [name, Boolean(secrets[name])])),
   };
 }

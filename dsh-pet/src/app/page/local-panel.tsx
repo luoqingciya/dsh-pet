@@ -27,6 +27,8 @@ interface ConfigView {
   balanceProvider: string;
   endpoints: EndpointView[];
   notify: { chatReply: boolean; balanceAlert: boolean };
+  /** 启动时检查新版本（只提示，不自动安装） */
+  updateCheck: boolean;
   keys: Record<string, boolean>;
 }
 
@@ -52,6 +54,7 @@ interface Draft {
   balanceProvider: string;
   endpoints: EndpointView[];
   notify: { chatReply: boolean; balanceAlert: boolean };
+  updateCheck: boolean;
 }
 
 /** 视图 → 草稿 */
@@ -62,6 +65,7 @@ function draftOf(view: ConfigView): Draft {
     balanceProvider: view.balanceProvider,
     endpoints: view.endpoints.map((endpoint) => ({ ...endpoint, models: [...endpoint.models] })),
     notify: { ...view.notify },
+    updateCheck: view.updateCheck !== false,
   };
 }
 
@@ -100,6 +104,14 @@ export function LocalPanel(): React.ReactElement {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ kind: '' | 'ok' | 'err'; text: string }>({ kind: '', text: '' });
   const [testResult, setTestResult] = useState<{ kind: '' | 'ok' | 'err'; text: string }>({ kind: '', text: '' });
+  /**
+   * 各服务商的模型清单（`GET /dsh-pet-7340/models`）——只用来给「模型」输入框做下拉建议。
+   *
+   * 从前这个接口在应用里**一个消费方都没有**：模型只能盲填，端点明明支持 `/models`
+   * 却没人去问。现在拉一次填进 datalist；拉不到（端点没实现 / 网络不通）就静默降级成
+   * 纯手填，不影响保存。
+   */
+  const [modelOptions, setModelOptions] = useState<Record<string, string[]>>({});
 
   const load = useCallback(async (): Promise<void> => {
     try {
@@ -122,6 +134,26 @@ export function LocalPanel(): React.ReactElement {
   useEffect(() => {
     void load();
   }, [load]);
+
+  /** 拉模型清单（只做输入建议；失败静默——手填永远可用） */
+  const loadModelOptions = useCallback(async (): Promise<void> => {
+    try {
+      const data = await request<{ providers: Array<{ id: string; models: Array<{ id: string }> }> }>(
+        '/dsh-pet-7340/models',
+      );
+      const map: Record<string, string[]> = {};
+      for (const provider of data.providers ?? []) {
+        map[provider.id] = (provider.models ?? []).map((model) => model.id).filter(Boolean);
+      }
+      setModelOptions(map);
+    } catch {
+      /* 拉不到就只保留手填 */
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadModelOptions();
+  }, [loadModelOptions]);
 
   const keyNames = useMemo(() => (draft ? keyNamesOf(draft, balanceProviders) : []), [draft, balanceProviders]);
 
@@ -158,6 +190,7 @@ export function LocalPanel(): React.ReactElement {
               models,
             })),
             notify: draft.notify,
+            updateCheck: draft.updateCheck,
           },
           keys: keyPatch,
         }),
@@ -243,13 +276,32 @@ export function LocalPanel(): React.ReactElement {
 
         <div className="row">
           <label>模型</label>
-          <input
-            type="text"
-            value={draft.model}
-            placeholder="如 deepseek-chat / qwen2.5:7b"
-            onChange={(event) => patch({ model: event.target.value })}
-          />
+          <div style={{ display: 'flex', gap: 8, flex: 1 }}>
+            <input
+              type="text"
+              list="dsh-pet-model-options"
+              value={draft.model}
+              placeholder="如 deepseek-flash / qwen-plus"
+              onChange={(event) => patch({ model: event.target.value })}
+            />
+            {/* 建议来自端点 /models；没有建议时 datalist 为空，输入框退化成纯手填 */}
+            <datalist id="dsh-pet-model-options">
+              {(modelOptions[draft.provider] ?? []).map((id) => (
+                <option key={id} value={id} />
+              ))}
+            </datalist>
+          </div>
         </div>
+        {(modelOptions[draft.provider] ?? []).length > 0 ? (
+          <p className="hint">
+            下拉建议来自端点自己的 <code>/models</code>（共 {modelOptions[draft.provider]!.length}{' '}
+            个），也可以直接手填。
+          </p>
+        ) : (
+          <p className="hint">
+            可以直接手填模型名；端点支持 <code>/models</code> 时会自动列出建议。
+          </p>
+        )}
 
         {currentEndpoint ? (
           <>
@@ -368,6 +420,25 @@ export function LocalPanel(): React.ReactElement {
               onChange={(event) => patch({ notify: { ...draft.notify, balanceAlert: event.target.checked } })}
             />
             余额/额度已用 ≥ 90% 时提醒一次
+          </label>
+        </div>
+      </div>
+
+      <div className="card">
+        <h2>更新</h2>
+        <p className="hint">
+          只<strong>提示</strong>有新版本，点通知打开下载页手动替换——不会自动下载或覆盖文件（免安装版没有安装器，
+          运行中替换 exe 反而更容易把应用弄坏）。也可以随时用托盘「检查更新」手动查一次。
+        </p>
+        <div className="row">
+          <label>自动检查</label>
+          <label className="chk">
+            <input
+              type="checkbox"
+              checked={draft.updateCheck}
+              onChange={(event) => patch({ updateCheck: event.target.checked })}
+            />
+            启动后检查一次新版本（之后每 12 小时一次；失败静默）
           </label>
         </div>
       </div>
