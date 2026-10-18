@@ -22,6 +22,16 @@ import { _electron } from 'playwright';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const executablePath = process.env.DSH_PET_ELECTRON;
+/** 等条件成立（最多 timeoutMs） */
+async function waitFor(check, timeoutMs = 15000, stepMs = 200) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await check()) return true;
+    await new Promise((r) => setTimeout(r, stepMs));
+  }
+  return false;
+}
+
 const PORT = 7416;
 const MOCK_PORT = 18098;
 
@@ -120,6 +130,21 @@ test('prompt cache 前缀稳定 + --port 生效', { skip: !executablePath, timeo
       '历史里的 user 消息必须是原文（带时间行就等于每轮都把前缀打断）',
     );
     assert.ok(lastUserOf(chat2).includes('第二句话'), '本轮用户消息不能被时间行顶掉');
+
+    // 回归：回复必须**显示在气泡上**，不能被 turn/end 的「这一轮搞定啦」盖掉。
+    // 现场故障：问完话只看到"任务结束"，回复其实已写进 S，得再点一次「对话」翻历史才看到。
+    let petPage;
+    for (const page of app.windows()) {
+      const title = await page.title().catch(() => '');
+      if (title.includes('桌宠')) petPage = page;
+    }
+    assert.ok(petPage, '宠物窗口必须在');
+    const bubbleShown = await waitFor(
+      () => petPage.evaluate(() => (document.querySelector('.pet-bubble.is-on')?.textContent || '').includes('好呀')),
+      10000,
+    );
+    const bubbleText = await petPage.evaluate(() => document.querySelector('.pet-bubble.is-on')?.textContent || '');
+    assert.ok(bubbleShown, `对话回复必须显示在气泡里（实际气泡：${JSON.stringify(bubbleText)}）`);
   } finally {
     await app.close().catch(() => {});
     mock.close();

@@ -132,11 +132,19 @@ export function readBalance(leaf: StateLeaf): { state: BalanceState; manual: boo
  * 碎碎念、命令气泡、对话回复共用这一个叶子——前端本来就是同一条展示链路
  * （同一个 triggerWhisper、同一个气泡槽、同一批 events.whisper 动画）。
  */
-export function readSay(leaf: StateLeaf): { text: string; image?: string } | null {
+export function readSay(leaf: StateLeaf): { text: string; image?: string; reply?: boolean } | null {
   if (!leaf.data || typeof leaf.data !== 'object') return null;
-  const d = leaf.data as { text?: unknown; image?: unknown };
+  const d = leaf.data as { text?: unknown; image?: unknown; reply?: unknown };
   if (typeof d.text !== 'string' || !d.text) return null;
-  return { text: d.text, image: typeof d.image === 'string' ? d.image : undefined };
+  // 缺省的键**不写 undefined**：叶子形状是对外契约，多一个 undefined 键会让消费端的
+  // 严格比对失败（与 host 侧 failed() 的约定一致）
+  return {
+    text: d.text,
+    ...(typeof d.image === 'string' ? { image: d.image } : {}),
+    // 对话回复（区别于周期碎碎念 / 第三方投喂）：展示层据此让"终态任务"气泡让位——
+    // 用户刚问的那句话，不能被「这一轮搞定啦」盖掉（见 sprite.js 的 renderBubble）
+    ...(d.reply === true ? { reply: true as const } : {}),
+  };
 }
 
 /**

@@ -135,6 +135,19 @@ test('版本检查提示 + 设置页模型建议', { skip: !executablePath, time
       assert.deepEqual(info.options.sort(), ['mock-a', 'mock-b']);
       assert.ok(info.hasUpdateToggle, '设置页必须有「自动检查」开关');
       assert.ok(info.text.includes('更新'), '设置页应有「更新」卡片');
+
+      // 「立即检查」按钮：点一下必须真的去查（mock 返回 v99.0.0），并给出可点的下载页链接
+      await settings.getByRole('button', { name: '立即检查' }).click();
+      const checked = await waitFor(
+        () => settings.evaluate(() => document.body.innerText.includes('有新版本 v99.0.0')),
+        15000,
+      );
+      const after = await settings.evaluate(() => ({
+        text: document.body.innerText,
+        link: document.querySelector('a[href="https://example.com/download"]') !== null,
+      }));
+      assert.ok(checked, `点「立即检查」应显示发现的新版本（实际：${after.text.slice(-120)}）`);
+      assert.ok(after.link, '有新版本时必须给出「打开下载页」链接');
     });
   } finally {
     await app.close().catch(() => {});

@@ -129,7 +129,7 @@ PetSprite.prototype.showBalanceNotice = function showBalanceNotice(state, manual
 
 // 碎碎念展示（本宠物）：随机抽 events.whisper 动画 + 弹文本气泡（10s 消失，与余额同一语义）
 // image：host 随机抽定的配图名称（未开配图/池为空则空串，与浏览器端同一契约）
-PetSprite.prototype.showWhisper = function showWhisper(text, image) {
+PetSprite.prototype.showWhisper = function showWhisper(text, image, reply) {
   const pool = this.animations.events?.whisper;
   if (!pool || pool.length === 0) {
     console.error('[dsh-pet] 配置缺少 animations.events.whisper，无法播放碎碎念动画');
@@ -151,8 +151,18 @@ PetSprite.prototype.showWhisper = function showWhisper(text, image) {
   );
   this.stopMove();
   this.whisperOn = true;
+  this.whisperReply = reply === true;
   this.whisperView = S.whisperBubbleView({ ok: true, text, ts: 0 });
   this.whisperImage = typeof image === 'string' ? image : '';
+  // 对话回复到达时，把「终态任务」气泡收起来：turn/end 的「这一轮搞定啦」只是状态装饰（只活 10s），
+  // 而这句话是用户刚问出来的答案。不收就会看到"任务结束了"却没有回答——回答其实已经写进 S，
+  // 只是被单槽优先级压在下面（现场：只能再点一次「对话」翻历史才看到）。
+  // 只收终态：进行中的档位（干活 / 等你确认）常驻，不该被一句话永久顶掉。
+  if (this.whisperReply && (this.workState === 'success' || this.workState === 'error')) {
+    if (this.workTimer !== null) window.clearTimeout(this.workTimer);
+    this.workTimer = null;
+    this.workOn = false;
+  }
   this.renderBubble();
   // 气泡 10s 定时消失（与动画解耦，与余额同一语义；重复触发先清旧定时器）
   if (this.whisperTimer !== null) window.clearTimeout(this.whisperTimer);
@@ -242,7 +252,7 @@ function applySayLeaf(petId, leaf) {
   const said = S.readSay(leaf);
   if (!said) return;
   for (const s of sprites) {
-    if (s.pet.id === petId) s.showWhisper(said.text, said.image);
+    if (s.pet.id === petId) s.showWhisper(said.text, said.image, said.reply);
   }
 }
 

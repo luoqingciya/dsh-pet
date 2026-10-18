@@ -439,11 +439,16 @@ export function apply(ctx: any): void {
       // 记忆只存正文（配图属展示层，不进上下文——否则下次请求会把标记当历史读回去）
       entry.messages.push({ role: 'assistant', content: generated.text, ts: now });
       await writeMemory(mem);
-      // 回复写进 S（与碎碎念同一个叶子：前端本来就是同一条展示链路）
+      // 回复写进 S（与碎碎念同一个叶子：前端本来就是同一条展示链路）。
+      // `reply: true` 是给展示层的信号：这是**用户刚问的那句话的回答**，优先级高于
+      // 「终态任务」气泡（否则对话一结束，turn/end 的「这一轮搞定啦」会把回答整段盖掉，
+      // 用户只看到"任务结束"、看不到回答——只能再点一次对话翻历史）。
       state.writePet(
         petId,
         'say',
-        generated.image ? { text: generated.text, image: generated.image } : { text: generated.text },
+        generated.image
+          ? { text: generated.text, image: generated.image, reply: true }
+          : { text: generated.text, reply: true },
       );
       return { ok: true as const };
     });

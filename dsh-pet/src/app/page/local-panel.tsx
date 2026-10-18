@@ -112,6 +112,10 @@ export function LocalPanel(): React.ReactElement {
    * 纯手填，不影响保存。
    */
   const [modelOptions, setModelOptions] = useState<Record<string, string[]>>({});
+  /** 手动检查更新的结果（托盘菜单也有入口，但那边是原生控件、字号小；设置页这个更显眼） */
+  const [updateResult, setUpdateResult] = useState<
+    undefined | { kind: 'checking' | 'newer' | 'latest' | 'error'; version?: string; url?: string; message?: string }
+  >(undefined);
 
   const load = useCallback(async (): Promise<void> => {
     try {
@@ -226,6 +230,22 @@ export function LocalPanel(): React.ReactElement {
       setTestResult({ kind: 'err', text: `失败：${error instanceof Error ? error.message : String(error)}` });
     } finally {
       setBusy(false);
+    }
+  };
+
+  /** 手动查一次新版本（与托盘「检查更新」走同一个后端） */
+  const checkUpdate = async (): Promise<void> => {
+    setUpdateResult({ kind: 'checking' });
+    try {
+      const result = await request<{
+        kind: 'newer' | 'latest' | 'error';
+        version?: string;
+        url?: string;
+        message?: string;
+      }>('/app/api/update-check', { method: 'POST' });
+      setUpdateResult(result);
+    } catch (error) {
+      setUpdateResult({ kind: 'error', message: error instanceof Error ? error.message : String(error) });
     }
   };
 
@@ -440,6 +460,30 @@ export function LocalPanel(): React.ReactElement {
             />
             启动后检查一次新版本（之后每 12 小时一次；失败静默）
           </label>
+        </div>
+        <div className="actions">
+          <button className="btn" type="button" onClick={() => void checkUpdate()}>
+            立即检查
+          </button>
+          {updateResult ? (
+            <span
+              className={`status ${updateResult.kind === 'error' ? 'err' : updateResult.kind === 'newer' ? 'ok' : ''}`}
+            >
+              {updateResult.kind === 'checking'
+                ? '正在检查…'
+                : updateResult.kind === 'newer'
+                  ? `有新版本 v${updateResult.version}：`
+                  : updateResult.kind === 'latest'
+                    ? `已是最新（v${updateResult.version}）`
+                    : `检查失败：${updateResult.message ?? '未知原因'}`}
+            </span>
+          ) : null}
+          {updateResult?.kind === 'newer' && updateResult.url ? (
+            // target=_blank：设置窗的 setWindowOpenHandler 会把外链交给系统浏览器打开
+            <a className="btn" href={updateResult.url} target="_blank" rel="noreferrer">
+              打开下载页
+            </a>
+          ) : null}
         </div>
       </div>
 

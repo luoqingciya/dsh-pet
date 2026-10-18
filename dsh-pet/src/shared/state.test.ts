@@ -13,7 +13,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { flattenCounters, readBalance, takeChanged, type PollState } from './state.ts';
+import { flattenCounters, readBalance, readSay, takeChanged, type PollState } from './state.ts';
 
 /** 造一份 S：sections / pets 用简写（叶子值 = counter，data 用 data 字段给） */
 function makeState(
@@ -156,5 +156,38 @@ describe('readBalance —— 余额叶子 → 客户端视图', () => {
     assert.equal(readBalance({ counter: 1, data: 'nope' }), null);
     assert.equal(readBalance({ counter: 1, data: { ok: true, provider: 'p', shape: '未知' } }), null);
     assert.equal(readBalance({ counter: 1, data: { ok: true, provider: 'p', shape: 'money' } }), null, '缺 data 段');
+  });
+});
+
+/**
+ * `readSay` —— 说话叶子的形状。
+ *
+ * `reply` 是「这句是**对话回复**」的标记（区别于周期碎碎念 / 第三方投喂）：展示层据此让
+ * 「终态任务」气泡让位。现场故障：对话一结束，turn/end 的成功气泡（"这一轮搞定啦"）把回答
+ * 整段盖住，用户只看到"任务结束了"，得再点一次对话翻历史才看到回复。
+ */
+describe('readSay —— 说话叶子（含对话回复标记）', () => {
+  test('普通碎碎念 / 投喂：只有文本（+ 可选配图）', () => {
+    assert.deepEqual(readSay({ counter: 1, data: { text: '嗯嗯' } }), { text: '嗯嗯' });
+    assert.deepEqual(readSay({ counter: 1, data: { text: '嗯嗯', image: '可爱' } }), {
+      text: '嗯嗯',
+      image: '可爱',
+    });
+  });
+
+  test('对话回复带 reply: true（只有严格 true 才算）', () => {
+    assert.deepEqual(readSay({ counter: 1, data: { text: '主人好', reply: true } }), {
+      text: '主人好',
+      reply: true,
+    });
+    assert.equal(readSay({ counter: 1, data: { text: 'x', reply: 'yes' } })?.reply, undefined);
+    assert.equal(readSay({ counter: 1, data: { text: 'x', reply: 1 } })?.reply, undefined);
+  });
+
+  test('脏数据 → null', () => {
+    assert.equal(readSay({ counter: 1, data: null }), null);
+    assert.equal(readSay({ counter: 1, data: 'nope' }), null);
+    assert.equal(readSay({ counter: 1, data: { text: '' } }), null);
+    assert.equal(readSay({ counter: 1, data: { text: 42 } }), null);
   });
 });

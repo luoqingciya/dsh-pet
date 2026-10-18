@@ -25,6 +25,7 @@ import {
   type AppConfig,
 } from './local-config';
 import type { LlmService } from './llm-openai';
+import { checkForUpdate } from './update-check';
 
 /** 设置页资源在包内的位置（构建产物：lib/app-settings.js 与 lib/app-settings.css） */
 export interface WebUiPaths {
@@ -299,6 +300,27 @@ export function createWebUi(deps: WebUiDeps) {
         sendJson(res, 200, await testGeneration(deps.llm(), provider, model));
       } catch (error) {
         sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
+      }
+      return true;
+    }
+
+    /**
+     * 手动检查更新（设置页「更新 → 立即检查」按钮）。
+     *
+     * 托盘菜单也有「检查更新」，但托盘菜单是原生控件、在 150% 屏上偏小；设置页是正常缩放的
+     * 页面，按钮更显眼。两条路走同一份 `checkForUpdate`，口径完全一致。
+     */
+    if (pathname === '/app/api/update-check' && method === 'POST') {
+      try {
+        const current = String(deps.runtime().version ?? '');
+        const result = await checkForUpdate({ current });
+        sendJson(res, 200, { ok: true, ...result });
+      } catch (error) {
+        sendJson(res, 200, {
+          ok: true,
+          kind: 'error',
+          message: error instanceof Error ? error.message : String(error),
+        });
       }
       return true;
     }

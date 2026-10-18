@@ -112,6 +112,8 @@ class PetSprite {
     this.whisperOn = false;
     this.whisperTimer = null;
     this.whisperView = null;
+    // 这条是不是**对话回复**（而不是周期碎碎念 / 第三方投喂）：决定它能不能压过终态任务气泡
+    this.whisperReply = false;
     this.whisperText = '';
     // 配图名称（配置 memes 的键；whisperImageEnabled 开启时由 host 随机抽定，随文本一起来）
     this.whisperImage = '';
@@ -1385,8 +1387,21 @@ class PetSprite {
     const whisperOn = !!(this.whisperOn && this.whisperView);
     const balanceOn = !!(this.bubbleOn && this.balanceView);
     const workTerminal = this.workState === 'success' || this.workState === 'error';
+    // 对话回复（whisperReply）**压过终态任务**：那一档只是"这一轮搞定啦"这类装饰，只活 10s；
+    // 而回复是用户刚问出来的答案。两者常在同一个 1s 轮询里一起到达，谁先应用都不该让回答消失。
+    // 周期碎碎念与第三方投喂不带这个标记，维持原优先级（不去顶常驻的进行中档位）。
     const slot =
-      workTerminal && workOn ? 'work' : whisperOn ? 'whisper' : balanceOn ? 'balance' : workOn ? 'work' : 'none';
+      whisperOn && this.whisperReply
+        ? 'whisper'
+        : workTerminal && workOn
+          ? 'work'
+          : whisperOn
+            ? 'whisper'
+            : balanceOn
+              ? 'balance'
+              : workOn
+                ? 'work'
+                : 'none';
     const whisperImg = slot === 'whisper' ? S.createMemeImage(this.whisperImage, BASE, this.assetRoot) : null;
     this.bubble.classList.toggle(
       'is-whisper',
