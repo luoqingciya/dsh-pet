@@ -1,6 +1,6 @@
 {
   "name": "dsh-pet",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "一只住在桌面上的透明动画桌宠：一百余段手绘风动画、拖拽甩抛、多开漫游，还能查余额、碎碎念、陪你聊天。不依赖任何 Agent 框架，双击即用。",
   "keywords": [
     "desktop-pet",
