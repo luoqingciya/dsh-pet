@@ -924,6 +924,10 @@ function createTrayMenu(options = {}) {
   let anchor = null;
   /** 上一次的菜单尺寸（CSS 像素）；下次弹出先用它，避免闪一下再收缩 */
   let size = { width: 220, height: 240 };
+  /** 本次弹出的时刻：用来区分"刚弹出的激活抖动"和"用户真的点了别处" */
+  let shownAt = 0;
+  /** 弹出后这段时间内的 blur 一律忽略（实测抖动在 10ms 内，给 400ms 足够宽松） */
+  const BLUR_GRACE_MS = 400;
 
   const toPhysical = (v) => Math.round(v * scaleOf());
 
@@ -964,8 +968,23 @@ function createTrayMenu(options = {}) {
     });
     win.setMenuBarVisibility(false);
     win.loadFile(path.join(__dirname, 'tray-menu.html'));
-    // 失焦 = 用户点了别处：与原生菜单一致，直接收起
-    win.on('blur', () => hide());
+    /**
+     * 失焦 = 用户点了别处：与原生菜单一致，直接收起。
+     *
+     * 但**刚弹出的那一下不算**：右键点在托盘图标上，输入事件属于任务栏/通知区域，
+     * 我们这边 show + focus 之后，shell 往往紧接着把激活状态收回去 —— 实测 show→focus→
+     * **9ms 后 blur**，菜单刚出来就消失（用户报障："弹出菜单，但又立刻消失"）。
+     * 所以弹出后一小段时间内的 blur 一律当激活抖动忽略，见 show() 里的 shownAt。
+     */
+    win.on('blur', () => {
+      if (Date.now() - shownAt < BLUR_GRACE_MS) {
+        // 抖动：把焦点要回来。只是"忽略"不够——窗口会停在失焦态，之后点别处也不会再有 blur，
+        // 菜单就成了看得见却关不掉的幽灵（下面 show() 里的兜底会把它收掉，但那就又"消失"了）。
+        if (!win.isDestroyed()) win.focus();
+        return;
+      }
+      hide();
+    });
     win.on('closed', () => {
       win = null;
     });
@@ -986,8 +1005,23 @@ function createTrayMenu(options = {}) {
     };
     if (target.webContents.isLoading()) target.webContents.once('did-finish-load', push);
     else push();
+    shownAt = Date.now();
     target.show();
-    target.focus();
+    /**
+     * 焦点要**等右键那一串窗口激活结束再要**。
+     *
+     * 立刻 focus 会被任务栏抢回去（实测 show → focus → 9ms 后 blur，窗口随即被 blur 处理器收起）。
+     * 延迟一拍再要，shell 那边已经处理完这次点击，焦点才留得住；万一还是没留住，
+     * 上面 blur 处理器里的宽限期会兜住，菜单至少不会刚出来就没。
+     */
+    setTimeout(() => {
+      if (win && !win.isDestroyed() && win.isVisible() && !win.isFocused()) win.focus();
+    }, 120);
+    // 兜底：宽限期过了还没拿到焦点，说明这个菜单既关不掉（没有 blur 可等）也没法用键盘，
+    // 留着只会变成"点别处也不消失"的幽灵菜单——直接收起。
+    setTimeout(() => {
+      if (win && !win.isDestroyed() && win.isVisible() && !win.isFocused()) hide();
+    }, BLUR_GRACE_MS + 200);
   }
 
   function destroy() {

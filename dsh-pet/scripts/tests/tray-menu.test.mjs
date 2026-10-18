@@ -19,7 +19,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { _electron } from 'playwright';
 
-import { electronExe, freePort, root, waitFor } from './_harness.mjs';
+import { electronExe, freePort, launchApp, root, waitFor } from './_harness.mjs';
 
 const executablePath = electronExe();
 
@@ -147,6 +147,47 @@ test('自绘托盘菜单：弹出、尺寸、点「退出」', { skip: !executab
     });
     const exit = await Promise.race([exited, new Promise((r) => setTimeout(() => r('timeout'), 15000))]);
     assert.notEqual(exit, 'timeout', '点「退出」后应用必须在 15 秒内退出');
+  } finally {
+    await app.close().catch(() => {});
+  }
+});
+
+/**
+ * 回归（0.9.1 实机报障）：菜单"弹出来又立刻消失"。
+ *
+ * 右键点在托盘图标上，输入事件属于任务栏/通知区域；我们 show + focus 之后，shell 往往紧接着
+ * 把激活状态收回去——实测 show → focus → **9ms 后 blur**，blur 处理器（失焦即收）立刻把菜单藏了。
+ *
+ * 这里不去模拟 Win32 消息（那要平台相关代码），而是**直接制造那个 blur**：刚弹出就 blur 一次，
+ * 断言菜单必须还在；过了宽限期再 blur，断言必须收起。前者钉住修复，后者保证"点别处仍会关"。
+ */
+test('托盘菜单：刚弹出时的失焦抖动不能把菜单收起', { skip: !executablePath, timeout: 90000 }, async () => {
+  const { app } = await launchApp({ tag: 'tray-blur', env: { DSH_PET_UPDATE_DELAY_MS: '600000' } });
+  const menuVisible = () =>
+    app.evaluate(({ BrowserWindow }) => {
+      const win = BrowserWindow.getAllWindows().find((w) => w.getTitle().includes('托盘菜单'));
+      return win ? win.isVisible() : false;
+    });
+  const blurMenu = () =>
+    app.evaluate(({ BrowserWindow }) => {
+      const win = BrowserWindow.getAllWindows().find((w) => w.getTitle().includes('托盘菜单'));
+      win?.blur();
+    });
+
+  try {
+    await app.evaluate(() => globalThis.__dshTray.show());
+    const shown = await waitFor(menuVisible, 10000);
+    assert.ok(shown, '菜单窗口必须弹出来');
+
+    // ① 刚弹出就失焦 = 任务栏把激活抢回去 → 不能收
+    await blurMenu();
+    await new Promise((r) => setTimeout(r, 700));
+    assert.equal(await menuVisible(), true, '弹出瞬间的失焦抖动不能把菜单收起（用户报障：弹出又立刻消失）');
+
+    // ② 过了宽限期再失焦 = 用户真的点了别处 → 必须收
+    await blurMenu();
+    await new Promise((r) => setTimeout(r, 400));
+    assert.equal(await menuVisible(), false, '宽限期之后失焦必须收起（否则菜单会变成关不掉的幽灵）');
   } finally {
     await app.close().catch(() => {});
   }
