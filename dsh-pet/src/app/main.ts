@@ -386,6 +386,21 @@ async function bootstrap(): Promise<void> {
       uptimeSec: Math.round(process.uptime()),
     }),
     extra: webUi,
+    /**
+     * `POST /shutdown`（API.md 承诺的「优雅停机」）。
+     *
+     * 从前这里没接：接口照常回 `{ok:true, stopping:true}`，但应用一动不动——脚本以为关掉了，
+     * 端口与宠物都还在（接口在、效果没有，与「摆设」同一类问题）。
+     * 现在接到与托盘「退出」同一条收尾路径上：`app.quit()` → before-quit 里释放宿主 effect
+     * （销毁桌面窗口、清定时器）→ 关服务 → exit。
+     *
+     * 延迟 100ms 再退：200 响应是刚 `res.end()` 出去的，立刻 exit 会把还没 flush 的连接掐掉，
+     * 调用方看到的是「请求失败」，而实际上服务已经停了。
+     */
+    onShutdown: () => {
+      appendLog('[shutdown] 收到 /shutdown，开始优雅停机');
+      setTimeout(() => app.quit(), 100);
+    },
   });
   portRef.value = server.port;
   port = server.port;

@@ -172,6 +172,22 @@ export class WorkStatusStore {
     return true;
   }
 
+  /**
+   * 写**终态**（success / error）——终态是**排他**的：先扫掉别处遗留的终态，再写自己。
+   *
+   * 为什么必须扫（第十一轮状态灯留下的缺陷）：外部状态灯用 `Date.now()` 当 seq，比会话事件的
+   * seq（事件自带的 0/1/2…）大几个数量级；同档位按 seq 取最近，于是「脚本点过一次成功」之后，
+   * **真实对话完成时展示的会是那条陈旧文案**（状态对了、文案是别人的）。终态的语义是
+   * 「刚刚结束了什么」，同一时刻只应有一个——谁最后结束，谁就是该展示的那个。
+   *
+   * @returns 是否有实际变化（清掉了别处终态也算：调用方据此决定要不要 publish）
+   */
+  setTerminal(sessionId: string, state: 'success' | 'error', seq = 0): boolean {
+    const cleared = this.clearTerminal(sessionId);
+    const changed = this.setState(sessionId, state, seq);
+    return cleared || changed;
+  }
+
   /** 写该会话的任务详情（null = 清空）；会话无活动条目 → 不动（它不会被展示） */
   setTask(sessionId: string, task: string | null): boolean {
     const prev = this.sessions.get(sessionId);

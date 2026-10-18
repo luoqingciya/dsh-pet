@@ -249,3 +249,55 @@ describe('WorkStatusStore.clearTerminal —— 点灯前扫掉遗留终态', () 
     assert.equal(s.clearTerminal('ext'), false, '没有可清的 → 返回 false（调用方据此不 publish）');
   });
 });
+
+/**
+ * 终态排他（第十一轮状态灯留下的缺陷）。
+ *
+ * 现场：脚本 `POST /work-status {"state":"success","text":"跑测试完成"}` 点亮过灯之后，
+ * 用户再跟宠物聊一句——对话确实完成了（状态 = success，动画对），但气泡里显示的是
+ * **"跑测试完成"** 这条脚本文案：外部条目用 `Date.now()` 当 seq，比会话事件的 seq
+ * （0/1/2…）大几个数量级，同档位按 seq 取最近 → 外部那条永远赢。
+ *
+ * 判据：终态的语义是"刚刚结束了什么"，同一时刻只应有一个——谁最后结束，谁就是展示源。
+ */
+describe('WorkStatusStore.setTerminal —— 终态排他（不让陈旧终态抢走展示）', () => {
+  test('真实对话的终态必须压过外部状态灯留下的陈旧终态', () => {
+    const s = new WorkStatusStore();
+    // 脚本点亮：seq = Date.now()（远大于会话事件 seq）
+    s.setTerminal('dsh-pet-external', 'success', Date.now());
+    s.setTask('dsh-pet-external', '跑测试完成');
+    assert.equal(s.snapshot().state, 'success');
+    assert.equal(s.snapshot().task, '跑测试完成');
+
+    // 对话开始（thinking 优先级更高，先压住它）
+    s.setState('dsh-pet-local', 'thinking', 0);
+    assert.equal(s.snapshot().state, 'thinking', '进行中的对话应当盖过陈旧的完成态');
+
+    // 对话完成：终态排他 → 外部那条被扫掉，展示的是对话自己的结果
+    s.setTerminal('dsh-pet-local', 'success', 0);
+    assert.equal(s.stateOf('dsh-pet-external'), undefined, '别处的陈旧终态必须被扫掉');
+    assert.equal(s.snapshot().state, 'success');
+    assert.equal(s.snapshot().task, null, '展示的必须是这次对话（它没有任务详情），不是脚本文案');
+  });
+
+  test('反过来也一样：外部点灯（进行中档位）先扫掉刚结束的对话终态', () => {
+    const s = new WorkStatusStore();
+    s.setTerminal('dsh-pet-local', 'error', 0);
+    assert.equal(s.snapshot().state, 'error');
+
+    // 与 applyExternalStatus 的非终态分支完全一致：先 clearTerminal，再 setState
+    assert.equal(s.clearTerminal('dsh-pet-external'), true);
+    s.setState('dsh-pet-external', 'working', Date.now());
+    assert.equal(s.stateOf('dsh-pet-local'), undefined, '灯亮了：上一轮的出错态不该继续挂着');
+    assert.equal(s.snapshot().state, 'working');
+  });
+
+  test('清掉别处终态也算变化（否则前端拿不到这一拍）', () => {
+    const s = new WorkStatusStore();
+    s.setTerminal('other', 'success', 9);
+    // 本会话已经是同样的终态：setState 会判"无变化"，但清掉 other 改变了展示
+    s.setTerminal('me', 'success', 1);
+    assert.equal(s.stateOf('other'), undefined);
+    assert.equal(s.setTerminal('me', 'success', 1), false, '什么都没变时返回 false');
+  });
+});

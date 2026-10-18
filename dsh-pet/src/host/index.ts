@@ -203,10 +203,15 @@ export function apply(ctx: any): void {
       if (workStatus.clear(EXTERNAL_STATUS_SESSION)) publishWorkStatus();
       return;
     }
-    // 先扫掉别处遗留的终态（对话刚结束的成功/出错会挂 60s）：它们的优先级高于 working，
-    // 不扫就会出现"灯点亮了，宠物还在演上一轮结果"。
-    workStatus.clearTerminal(EXTERNAL_STATUS_SESSION);
-    workStatus.setState(EXTERNAL_STATUS_SESSION, input.state, Date.now());
+    // 终态排他：先扫掉别处遗留的终态（对话刚结束的成功/出错会挂 60s），否则它们按优先级/seq
+    // 抢走展示——「灯点亮了，宠物还在演上一轮结果」，或者反过来灯的成功文案压住真实对话结果
+    // （外部 seq = Date.now()，永远比会话事件新）。进行中的档位不动：那是真的在干活。
+    if (input.state === 'success' || input.state === 'error') {
+      workStatus.setTerminal(EXTERNAL_STATUS_SESSION, input.state, Date.now());
+    } else {
+      workStatus.clearTerminal(EXTERNAL_STATUS_SESSION);
+      workStatus.setState(EXTERNAL_STATUS_SESSION, input.state, Date.now());
+    }
     workStatus.setTask(EXTERNAL_STATUS_SESSION, input.text);
     publishWorkStatus();
     if (input.ttlSec > 0) {
@@ -1269,8 +1274,14 @@ export function apply(ctx: any): void {
         return;
       }
       const seq = Number((event as { seq?: unknown }).seq ?? 0);
-      // 同会话同状态不重复更新（防刷屏）；不同状态才改写并重算展示
-      if (!workStatus.setState(sessionId, next, seq)) return;
+      // 同会话同状态不重复更新（防刷屏）；不同状态才改写并重算展示。
+      // 终态走 setTerminal（终态排他：先扫掉别处遗留的成功/出错，否则外部状态灯那条用
+      // Date.now() 当 seq 的陈旧文案会抢走真实对话结果的展示，见 work-status.ts）。
+      const changed =
+        next === 'success' || next === 'error'
+          ? workStatus.setTerminal(sessionId, next, seq)
+          : workStatus.setState(sessionId, next, seq);
+      if (!changed) return;
       publishWorkStatus(); // 档位变了 → 写 S（前端据此切动画 + 气泡）
       // 终态只展示短暂窗口后自动清理：陈旧完成态不再浮上来（Bug 3 的一环，顺带缓解 Bug 2 残留）。
       // 回到非终态则取消那次待执行的清理——否则它到点时会话已非终态，既不清也不重排，
