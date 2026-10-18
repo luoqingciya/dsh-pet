@@ -8,23 +8,16 @@
 //   3) 设置页（app-settings → lib/app-settings.js）—— 浏览器 IIFE，react 打进产物（应用里没有
 //      模块加载器，留下裸 import 就是白屏）。
 //
-// 关于 alias：宿主半边静态 import 了三个只在 DSH 里存在的包（dsh-home-paths / dsh-credentials /
-// dsh-llm），应用里没有它们，因此换成 `src/app/shims/*`——替身只做「转调本包自己的同口径实现」，
-// 没有任何生成/网络逻辑。其余 @deepseek-ai/* 按外部处理（负向断言），避免哪天误把 DSH 代码打进产物。
+// 关于外部依赖：宿主半边原先静态 import 了三个只在 DSH 里存在的包（dsh-home-paths /
+// dsh-credentials / dsh-llm），脱离 DSH 后已改为 `src/host/standalone/*` 的本地实现，
+// 构建期不再需要 alias。`@deepseek-ai/*` 一律按外部处理：万一哪天又引进来，产物里会留下
+// 裸 require（启动即失败），而不是把 DSH 的代码悄悄打进包。
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'tsdown';
 
-import { loadShims } from './scripts/shims.mjs';
-
 /** 本配置文件所在目录（= 包根） */
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)));
-
-/**
- * `@deepseek-ai/*` 的替身映射：唯一来源是 tsconfig.json 的 paths（见 scripts/shims.mjs）。
- * tsdown 的 alias 收绝对路径最稳，这里把相对 paths 解析成绝对路径。
- */
-const SHIMS = loadShims();
 
 /** 主进程与启动器共用的编译口径 */
 const shared = {
@@ -43,17 +36,11 @@ export default defineConfig([
     entry: { 'app-main': 'src/app/main.ts' },
     // `@electron/get` **不能外部化**：便携包里没有 node_modules，裸 require 会在启动瞬间
     // ERR_MODULE_NOT_FOUND（表现为一个什么都看不到的 "Error" 弹框）。它由下面的 alias 换成替身。
-    noExternal: [/^@deepseek-ai\/(?:dsh-home-paths|dsh-credentials|dsh-llm)$/, '@electron/get'],
-    external: [
-      /^electron$/,
-      /^@electron\/(?!get$)/,
-      /^node:/,
-      /^@deepseek-ai\/(?!dsh-home-paths$|dsh-credentials$|dsh-llm$)/,
-    ],
+    noExternal: ['@electron/get'],
+    external: [/^electron$/, /^@electron\/(?!get$)/, /^node:/, /^@deepseek-ai\//],
     alias: {
-      ...SHIMS,
-      // @electron/get 不在 tsconfig paths 里（它在 node_modules 里，类型正常），
-      // 但便携包不能带 node_modules，所以构建期换成替身
+      // @electron/get 在 node_modules 里（类型正常），但便携包不能带 node_modules，
+      // 所以构建期换成替身
       '@electron/get': join(packageRoot, 'src', 'app', 'shims', 'electron-get.ts'),
     },
     outputOptions: { entryFileNames: '[name].cjs' },

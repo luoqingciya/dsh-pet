@@ -18,7 +18,7 @@
  *                                含注释与全部高级字段）—— 两个写接口的**响应体都是保存后的成品聚合**
  *   /dsh-pet-7340/reload              → 「重载配置」（POST）：重建桌面窗口，全部宠物窗口按最新配置重建；
  *                                与保存走**同一条**重启路径（syncDesktop），数量/display/size 变化同样生效
- *   /dsh-pet-7340/config/meta         → 配置文件与素材目录路径 + 全部存储位置清单（设置页「存储」区）
+ *   /dsh-pet-7340/config/meta         → 配置文件与素材目录路径（设置页「存储」区）
  *   /dsh-pet-7340/models              → 可选「服务商 + 模型」清单（设置页「本地服务」下拉框数据源）
  *   /dsh-pet-7340/thumb/<素材根>/<动画名>.webm|.mov  → 素材按宠物归属：
  *       文件宠物 = /dsh-pet/pet/<素材根>-animation/（只查自己的，绝不回落）；
@@ -45,11 +45,10 @@
 import { existsSync } from 'node:fs';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { resolveDshHome } from '@deepseek-ai/dsh-home-paths';
-import { credentialRef } from '@deepseek-ai/dsh-credentials';
+import { resolveDshHome } from './standalone/home-paths';
+import { credentialRef } from './standalone/credentials';
 import { queryBalance } from './balance/index';
 import { generateWhisper } from './whisper';
 import { generateChat, type ChatMemoryMessage } from './chat';
@@ -90,7 +89,6 @@ import {
   shouldNotifySession,
   type HostNotifyFrame,
 } from './notify-events';
-import { profileNameFrom, storageEntries } from './storage-paths';
 import { createAssetPaths } from './assets';
 import { PollStateStore } from './state';
 import {
@@ -105,7 +103,6 @@ import {
 } from './http';
 import { petSystemPrompt, withTimeContext } from './prompt';
 import type { DesktopRequest, DesktopResponse, PetDesktop } from './desktop-api';
-import { electronLandingDir } from '../app/electron-runtime';
 
 /** 插件行 id（与 cordis.patch.yml 一致） */
 export const name = 'pet';
@@ -811,7 +808,9 @@ export function apply(ctx: any): void {
       return { kind: 'json', status: 200, obj: { reloading: true } };
     }
 
-    // 配置文件路径 + 存储位置清单（设置页「高级配置」与「卸载与存储」展示用）
+    // 配置文件与素材目录路径（设置页「存储」区展示用）。
+    // 从前这里还返回 storage（全部落盘位置）与 profile（拼 DSH 插件卸载命令用）：
+    // 前者没有任何消费方、后者随脱离 DSH 一起作废，一并删除。
     if (rest === 'config/meta') {
       return {
         kind: 'json',
@@ -821,16 +820,6 @@ export function apply(ctx: any): void {
           default: join(PACKAGE_ROOT, 'assets', 'config.jsonc'),
           animations: thumbUserRoot,
           memes: memesUserRoot,
-          // 全部落盘位置（本包用户数据 / Electron 运行时 / 桌面端缓存 / 下载缓存 / 插件本体）：
-          // 前两条直接传真实写入方的路径，不在这里重拼目录名
-          storage: storageEntries({
-            userDataRoot: userRoot,
-            electronDir: electronLandingDir(),
-            home: homedir(),
-            packageRoot: PACKAGE_ROOT,
-          }),
-          // profile 名（拼卸载命令 dsh plugin --profile <名> remove dsh-pet；反推不出时为空串）
-          profile: profileNameFrom(PACKAGE_ROOT) ?? '',
         },
       };
     }

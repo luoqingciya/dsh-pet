@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 /**
- * 下载 Electron 运行时到 `$DSH_HOME/electron`（默认 `~/.dsh/electron`）。
+ * 下载 Electron 运行时到 `electronLandingDir()`（本应用缓存目录下的 `electron/`，
+ * 按平台为 `%LOCALAPPDATA%\dsh-pet\electron` / `~/Library/Caches/dsh-pet/electron` /
+ * `~/.cache/dsh-pet/electron`；可用 `DSH_PET_ELECTRON_DIR` 覆盖）。
  *
  * 为什么是这么薄的一层：真正的下载/校验/解压逻辑在 `src/app/electron-runtime.ts` 的
  * `ensureElectronDownload()` 里——应用首次启动自动下载走的也是它。以前这里有一份**重复实现**
@@ -10,15 +12,15 @@
  * 现在只有一份实现，这里只负责调用它并把结果打印出来。
  *
  * 用法：npm run ensure:electron
- * 环境变量：DSH_HOME / DSH_PET_ELECTRON_VERSION / DSH_PET_ELECTRON_MIRROR（见上面的实现）
+ * 环境变量：DSH_PET_ELECTRON_DIR / DSH_PET_ELECTRON_VERSION / DSH_PET_ELECTRON_MIRROR
  */
-import { existsSync } from 'node:fs';
-
-import { defaultElectronExe, ensureElectronDownload } from './electron-runtime';
+import { ensureElectronDownload, resolveElectronPath } from './electron-runtime';
 
 async function main() {
-  const existing = defaultElectronExe();
-  if (existsSync(existing)) {
+  // 先用解析器走一遍：显式路径 / npm 包 / 缓存目录 / 旧版 ~/.dsh 位置都算"已有"，
+  // 避免旧用户因为换了落地目录又白下 350MB
+  const existing = resolveElectronPath();
+  if (existing) {
     console.log(existing);
     return 0;
   }

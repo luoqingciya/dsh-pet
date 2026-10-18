@@ -50,6 +50,19 @@ interface ConfigMeta {
   animations?: string;
 }
 
+/** 开机自启状态（`/app/api/autostart`，以系统为准） */
+interface AutoStartState {
+  supported: boolean;
+  enabled: boolean;
+  /** 写在哪里：注册表项 / 登录项 / .desktop 路径 */
+  target: string;
+  /** 登录时执行的命令行（源码态会带主进程脚本） */
+  command: string;
+  /** 源码态：挪了仓库位置就失效 */
+  dev: boolean;
+  reason?: string;
+}
+
 /** 保存请求体（宿主白名单字段；未列出的顶层字段由宿主从磁盘透传保留） */
 interface SaveBody {
   pets: PetDraft[];
@@ -151,6 +164,44 @@ export function PetPanel(): ReactElement {
   const [dialog, setDialog] = useState<null | { kind: 'remove' | 'lastOne' | 'reset' | 'corrupt'; path?: string }>(
     null,
   );
+  /**
+   * 开机自启：**不随「保存」走**——它是立刻写系统（Windows 注册表 / macOS 登录项 /
+   * Linux 的 .desktop），所以单独存一份状态和自己的提示，保存按钮不该影响它。
+   */
+  const [autoStart, setAutoStart] = useState<AutoStartState | undefined>(undefined);
+  const [autoStartBusy, setAutoStartBusy] = useState(false);
+  const [autoStartMsg, setAutoStartMsg] = useState<{ kind: '' | 'ok' | 'err'; text: string }>({ kind: '', text: '' });
+
+  /** 重新读系统里的自启状态（读不到就保持原样，不影响其它设置） */
+  const refreshAutoStart = useCallback(async (): Promise<void> => {
+    try {
+      const data = await request<{ ok: boolean; state: AutoStartState }>('/app/api/autostart', { cache: 'no-store' });
+      setAutoStart(data.state);
+    } catch {
+      /* 接口不可用（老版本宿主）：这一块不显示，别拖垮整页 */
+    }
+  }, []);
+
+  /** 拨开关：立即生效，成功后以系统返回的状态为准；失败要拨回去，不能让 UI 撒谎 */
+  const toggleAutoStart = async (enabled: boolean): Promise<void> => {
+    if (autoStartBusy) return;
+    setAutoStartBusy(true);
+    setAutoStartMsg({ kind: '', text: '' });
+    try {
+      const data = await request<{ ok: boolean; state: AutoStartState }>('/app/api/autostart', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+      });
+      setAutoStart(data.state);
+      setAutoStartMsg({ kind: 'ok', text: data.state.enabled ? '已开启：下次登录会自动启动' : '已关闭' });
+    } catch (error) {
+      setAutoStartMsg({ kind: 'err', text: `设置失败：${error instanceof Error ? error.message : String(error)}` });
+      await refreshAutoStart();
+    } finally {
+      setAutoStartBusy(false);
+    }
+  };
 
   /** 用成品聚合刷新全部状态 */
   const adopt = useCallback((merged: Record<string, MainConfig>) => {
@@ -179,11 +230,12 @@ export function PetPanel(): ReactElement {
       // 路径信息只是展示，读不到不影响编辑
       const info = await request<ConfigMeta>('/dsh-pet-7340/config/meta').catch(() => ({}));
       setMeta(info);
+      await refreshAutoStart();
     } catch (error) {
       setLoadState('error');
       setMsg({ kind: 'err', text: `读取配置失败：${error instanceof Error ? error.message : String(error)}` });
     }
-  }, [adopt]);
+  }, [adopt, refreshAutoStart]);
 
   useEffect(() => {
     void load();
@@ -649,6 +701,41 @@ export function PetPanel(): ReactElement {
           </button>
         </div>
       </details>
+
+      <div className="card">
+        <h2>启动</h2>
+        <label className="chk">
+          <input
+            type="checkbox"
+            checked={autoStart?.enabled === true}
+            // 状态没读到 / 平台不支持时禁用：宁可点不动，也不要让开关显示一个假状态
+            disabled={autoStartBusy || !autoStart || autoStart.supported === false}
+            onChange={(event) => void toggleAutoStart(event.target.checked)}
+          />
+          开机自启（登录后自动启动 dsh-pet）
+        </label>
+        <p className="hint">
+          {autoStart === undefined ? (
+            '正在读取系统里的自启状态…'
+          ) : autoStart.supported === false ? (
+            (autoStart.reason ?? '当前平台不支持开机自启')
+          ) : (
+            <>
+              {autoStart.dev ? (
+                <>
+                  当前是源码运行，登录后会执行 <code>{autoStart.command}</code>
+                  。移动或删除仓库后需要回来重新勾一次。
+                </>
+              ) : (
+                `写入位置：${autoStart.target}。`
+              )}
+              <br />
+              此开关立即生效，不受「保存」影响。
+            </>
+          )}
+        </p>
+        {autoStartMsg.text ? <p className={`status ${autoStartMsg.kind}`}>{autoStartMsg.text}</p> : null}
+      </div>
 
       <div className="card">
         <h2>存储</h2>

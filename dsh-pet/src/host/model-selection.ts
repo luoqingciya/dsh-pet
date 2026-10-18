@@ -6,8 +6,8 @@
  * 填了则优先用它，但选中的模型可能已经不可用（凭据被删 / 模型下架 / 该服务商没配 key），
  * 那时**回落到当前对话的模型重试一次**，仍失败才按生成失败报错——桌宠不会因为改错一次配置就彻底哑掉。
  *
- * 依赖约束：本模块不 import @deepseek-ai/dsh-llm（生成模块才需要它），保证能在 node:test 里
- * 直接单测（与 chat.test.ts 只测 memes.ts 同一个理由）。
+ * 依赖约束：本模块不 import LLM 生成侧（`./standalone/llm` 只有生成模块才需要），
+ * 保证能在 node:test 里直接单测（与 chat.test.ts 只测 memes.ts 同一个理由）。
  */
 
 /** 一处「服务商 + 模型」选择（与 shared/types.ts 的 ModelSelection 同构） */

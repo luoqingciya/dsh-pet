@@ -5,7 +5,7 @@
  *  - 两个来源是同一个选择 → 去重只留一个（否则失败时会拿同一个模型白试一遍、白等一个超时）；
  *  - 当前对话没配模型 → 只留配置的那个；两边都拿不到 → 空链（生成侧回「当前对话未配置模型」）。
  *
- * 本模块不 import @deepseek-ai/dsh-llm（纯逻辑），故能在 node:test 里直接跑——
+ * 本模块不 import LLM 生成侧（纯逻辑），故能在 node:test 里直接跑——
  * 与 chat.test.ts 只测 memes.ts 同一个理由。
  *
  * 跑法：node --experimental-strip-types --test src/host/model-selection.test.ts

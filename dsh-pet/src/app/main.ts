@@ -11,8 +11,8 @@
  *      `protocol.handle` 直接调宿主路由——同进程内一次函数调用，没有子进程、没有管道；
  *   4. **托盘 + 设置窗口**：应用的壳。关闭设置窗口不退出，退出走托盘菜单。
  *
- * 边界：运行期不 import 任何 `@deepseek-ai/*`（构建期由 alias 换成 `src/app/shims/*` 的替身），
- * 数据目录是应用自己的 `app.getPath('userData')`。
+ * 边界：源码里不出现任何 DSH 包名——宿主半边需要的 LLM 原语 / 凭证引用 / 数据根解析
+ * 都在 `src/host/standalone/*` 有一份本地实现；数据目录是应用自己的 `app.getPath('userData')`。
  */
 import { app, BrowserWindow, Menu, Notification, Tray, nativeImage, safeStorage, shell } from 'electron';
 import {
@@ -39,6 +39,7 @@ import { portFromArgv } from './port-arg';
 import { encryptionAvailable, setSecretCodec } from './secrets';
 import { startNotifyWatcher } from './notifications';
 import { checkForUpdate, RELEASES_PAGE } from './update-check';
+import { readAutoStart, writeAutoStart } from './autostart';
 import { createWebUi } from './web-ui';
 
 // ---------- 应用身份与数据目录 ----------
@@ -519,6 +520,9 @@ async function bootstrap(): Promise<void> {
       await shell.openPath(dir);
     },
     dataDir: () => petDataDir(),
+    // 开机自启：状态以系统为准（Windows 注册表 / macOS 登录项 / Linux .desktop），见 autostart.ts
+    autoStart: () => readAutoStart(),
+    setAutoStart: (enabled: boolean) => writeAutoStart(enabled),
     // 设置页「退出」：走 before-quit 的收尾（释放宿主 effect → 关服务 → exit）
     quit: () => app.quit(),
   });

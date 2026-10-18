@@ -5,11 +5,13 @@
  * 与 `/app/api/*`（本文件）都能直接 fetch，不必为 IPC 再铺一条数据通路；
  * 顺带的好处是排障时可以用普通浏览器打开同一页。
  *
- * 只提供 4 个接口（够用即止，不做通用后台）：
+ * 只提供这几个接口（够用即止，不做通用后台）：
  *   GET  /app/api/config     读配置视图（密钥只报「有没有配」）
  *   POST /app/api/config     保存（配置 + 密钥，白名单重建）
  *   POST /app/api/test       用当前设置试生成一句话（验证端点/密钥/模型是否可用）
  *   POST /app/api/open-dir   在系统文件管理器里打开数据目录
+ *   GET  /app/api/autostart  读开机自启状态（以系统为准）
+ *   POST /app/api/autostart  开关开机自启（立即生效，不跟「保存」走）
  */
 import { readFileSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -25,6 +27,7 @@ import {
   type AppConfig,
 } from './local-config';
 import type { LlmService } from './llm-openai';
+import type { AutoStartState } from './autostart';
 import { checkForUpdate } from './update-check';
 
 /** 设置页资源在包内的位置（构建产物：lib/app-settings.js 与 lib/app-settings.css） */
@@ -46,6 +49,10 @@ export interface WebUiDeps {
   dataDir(): string;
   /** 退出应用（设置页「退出」按钮：托盘菜单之外的第二条退出路径） */
   quit(): void;
+  /** 读开机自启状态（系统为准，见 autostart.ts） */
+  autoStart(): AutoStartState;
+  /** 开关开机自启（写系统；失败抛错） */
+  setAutoStart(enabled: boolean): AutoStartState;
 }
 
 /** 读请求体（限 1MiB，避免被本地脚本灌爆内存） */
@@ -161,6 +168,18 @@ details.card[open]>summary::after{content:"▴"}
 details.card[open]>summary{margin-bottom:14px}
 .row{display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center;margin-bottom:12px}
 .row > label{color:var(--app-text-2);font-size:13px}
+/* 「模型」输入框的自绘建议列表（替代原生 datalist：原生弹层不跟页面 zoom，150% 屏上只有 2/3 大） */
+.suggest{position:relative}
+.suggest-list{
+  position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:20;margin:0;padding:4px;
+  list-style:none;background:var(--app-card);border:1px solid var(--app-line-strong);border-radius:8px;
+  box-shadow:0 12px 32px rgba(0,0,0,.4);max-height:240px;overflow-y:auto;
+}
+.suggest-list li{
+  padding:6px 10px;border-radius:6px;font-size:13px;line-height:1.5;color:var(--app-text);
+  cursor:default;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.suggest-list li.is-active{background:var(--app-accent);color:#fff}
 input[type=text],input[type=password],input[type=number],select{
   width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--app-line-strong);
   background:var(--app-bg);color:var(--app-text);font:inherit;outline:none;
@@ -323,6 +342,29 @@ export function createWebUi(deps: WebUiDeps) {
           kind: 'error',
           message: error instanceof Error ? error.message : String(error),
         });
+      }
+      return true;
+    }
+
+    /**
+     * 开机自启：读 / 写。
+     *
+     * 独立成两个接口而不是塞进 `/app/api/config`：它不是"配置"，而是**立刻生效的系统状态**
+     * （Windows 注册表 / macOS 登录项 / Linux 的 .desktop），也不该跟着「保存/放弃修改」走。
+     * 状态以系统为准，所以写入后把重新读出来的结果回给页面，避免"以为开了其实没开"。
+     */
+    if (pathname === '/app/api/autostart' && method === 'GET') {
+      sendJson(res, 200, { ok: true, state: deps.autoStart() });
+      return true;
+    }
+
+    if (pathname === '/app/api/autostart' && method === 'POST') {
+      try {
+        const raw: unknown = JSON.parse((await readBody(req)) || '{}');
+        const enabled = Boolean((raw as { enabled?: unknown } | null)?.enabled);
+        sendJson(res, 200, { ok: true, state: deps.setAutoStart(enabled) });
+      } catch (error) {
+        sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
       }
       return true;
     }

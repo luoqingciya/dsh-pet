@@ -57,7 +57,11 @@ npm install
 npm run app
 ```
 
-首次启动会自动下载一份 Electron 到 `~/.dsh/electron`（约 350MB，只下一次；打包版已自带，不需要下载）。
+首次启动会自动下载一份 Electron 运行时（约 350MB，只下一次；打包版已自带，不需要下载），
+落在**本应用自己的缓存目录**：Windows `%LOCALAPPDATA%\dsh-pet\electron`、
+macOS `~/Library/Caches/dsh-pet/electron`、Linux `~/.cache/dsh-pet/electron`
+（不再写进 `~/.dsh`——那是 DeepSeek Harness 的目录，本项目已经脱离它）。
+要换位置用 `DSH_PET_ELECTRON_DIR`，要复用已有的 Electron 用 `DSH_PET_ELECTRON_PATH`。
 `npm run app` 会先构建再启动，改完代码重跑即可。源码态的数据放在 Electron 的用户目录
 （`%APPDATA%\dsh-pet`），与打包版互不干扰。
 
@@ -87,6 +91,9 @@ Windows 直接双击仓库里的 `dsh-pet.cmd`；macOS / Linux 运行 `./dsh-pet
   弹窗打开时顶部会显示最近几条——记住的和看到的永远是同一份
 - **状态灯**：回话时切「思考 → 成功 / 出错」；也能由任何脚本点亮——本机任务跑到哪一步，桌宠就演哪一档
 - **系统通知**：回话完成 / 生成失败、余额告急时弹原生通知
+- **开机自启**：设置页「启动」一勾即可（Windows 写 `HKCU\…\CurrentVersion\Run`、
+  macOS 走登录项、Linux 按 XDG 规范写 `~/.config/autostart/dsh-pet.desktop`）；
+  状态以系统为准——在「任务管理器 → 启动」里禁掉后，设置页会如实显示为关
 - **更新提示**：启动后查一次新版本，有新版弹通知、点一下打开下载页（**只提示，不自动替换文件**）；
   托盘「检查更新」可随时手动查
 - **自定义**：往数据目录丢 VP9-alpha `.webm` 就是新动画；`pet/` 下建配置就能加**全新宠物种类**
@@ -103,6 +110,7 @@ Windows 直接双击仓库里的 `dsh-pet.cmd`；macOS / Linux 运行 `./dsh-pet
 每只宠物独立配置：名字、大小、**是否显示在桌面**、贴哪个角与偏移、四个功能开关
 （余额动画 / 碎碎念 / 状态灯 / 待在原地）。
 全局配置：配图开关、抛掷锁定屏幕、字体与字号、对话记忆轮数、拖拽手感（重力 / 弹性 / 摩擦 / 力度 / 互撞）。
+底部的「启动」一栏是**开机自启**：立刻生效，不跟「保存」走（见上面的功能说明）。
 
 ### 本地服务
 
@@ -245,6 +253,10 @@ dsh-pet.exe（单个 Electron 进程）
 `src/host` + `src/shared`；`src/app` 只补「宿主该提供的东西」（凭证 / 模型 / 通知）和一个壳。
 加一个端点或改一处动画逻辑，桌面窗口、设置页、HTTP 接口同时生效。
 
+宿主半边需要的三样「框架级」原语——LLM 消息构造、凭证引用、用户数据根——在
+`src/host/standalone/` 有一份本地实现。项目**不依赖任何 Agent 框架**，源码里也不出现
+DSH 的包名（`npm run prepack` 会扫描产物，混进 `@deepseek-ai/*` 直接判失败）。
+
 桌宠窗口与宿主在**同一个进程**里：渲染端的每个请求走 `dsh-pet-bridge://` scheme，
 `protocol.handle` 直接调宿主路由（同进程函数调用，不经网络、不经管道）。早先的版本把窗口层
 放在一个独立的 Electron 子进程里、用 stdout 管道通信——那套间接层已整体移除，
@@ -294,6 +306,7 @@ dsh-pet.exe（单个 Electron 进程）
 | 端口 7340 被占用                      | 会自动顺延；要固定用 `dsh-pet --port 7500`（或 `npm run app -- --port 7500`），或设 `DSH_PET_APP_PORT=7500`                                                   |
 | 装到 Program Files 后数据不在安装目录 | 那里对普通用户不可写，应用自动回落到用户目录；改用默认的 per-user 安装位置即可                                                                                |
 | 想看详细日志                          | `DSH_PET_APP_DEBUG=1 npm run app`，或直接看 `app.log`                                                                                                         |
+| 开机后没有自动启动                    | 先看「任务管理器 → 启动」里 dsh-pet 是否被禁用（Windows 会尊重那里的开关，设置页也会跟着显示为关）；源码态挪过仓库目录的话，回设置页重新勾一次                |
 | 从不提示新版本                        | 国内访问 `api.github.com` 常不通（失败静默）；托盘「检查更新」会明确报错。可用 `DSH_PET_UPDATE_API` 指向镜像或自建 JSON（`{version,url}` 或 GitHub 形状都认） |
 
 ---

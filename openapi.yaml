@@ -802,10 +802,9 @@ paths:
     get:
       tags: [Config]
       operationId: getConfigMeta
-      summary: 配置文件路径与存储位置清单
+      summary: 配置文件与素材目录路径
       description: |
-        设置页「高级配置」与「卸载与存储」区块的展示数据源：
-        告诉你配置和各类数据到底落在哪，以及卸载命令该用哪个 profile。
+        设置页「存储」区的展示数据源：告诉你配置和素材到底落在哪。
       responses:
         "200":
           description: 路径清单
@@ -813,7 +812,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [user, default, animations, storage, profile]
+                required: [user, default, animations]
                 properties:
                   user:
                     type: string
@@ -824,15 +823,9 @@ paths:
                   animations:
                     type: string
                     description: 用户动画素材根目录绝对路径
-                  storage:
-                    type: array
-                    description: 全部落盘位置（用户数据 / Electron 运行时 / 桌面端缓存 / 下载缓存 / 程序本体）
-                    items:
-                      $ref: "#/components/schemas/StorageEntry"
-                  profile:
+                  memes:
                     type: string
-                    description: |
-                      历史字段（早期版本用于拼接卸载命令），当前恒为空串。
+                    description: 用户表情包根目录绝对路径
 
   /dsh-pet-7340/models:
     get:
@@ -1535,16 +1528,6 @@ components:
                 type: string
               name:
                 type: string
-
-    StorageEntry:
-      type: object
-      description: 一处落盘位置
-      properties:
-        label:
-          type: string
-        path:
-          type: string
-      additionalProperties: true
 
     ModelSelection:
       type: object

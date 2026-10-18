@@ -108,10 +108,22 @@ export function LocalPanel(): React.ReactElement {
    * 各服务商的模型清单（`GET /dsh-pet-7340/models`）——只用来给「模型」输入框做下拉建议。
    *
    * 从前这个接口在应用里**一个消费方都没有**：模型只能盲填，端点明明支持 `/models`
-   * 却没人去问。现在拉一次填进 datalist；拉不到（端点没实现 / 网络不通）就静默降级成
+   * 却没人去问。现在拉一次填进下面的自绘下拉；拉不到（端点没实现 / 网络不通）就静默降级成
    * 纯手填，不影响保存。
    */
   const [modelOptions, setModelOptions] = useState<Record<string, string[]>>({});
+  /**
+   * 「模型」输入框的自绘下拉建议（替代原生 `<datalist>`）。
+   *
+   * 为什么不用 datalist：它的弹层是**原生控件**，不跟页面缩放走。设置窗为了补偿
+   * `force-device-scale-factor=1` 把 `zoomFactor` 设成 uiScale（150% 屏上 = 1.5），
+   * DOM 全跟着放大，唯独原生弹层还是 1×，于是建议列表只有正常字号的 2/3
+   * （与托盘菜单当初"太小"是同一类问题，那边改成了自绘窗口）。
+   * 自绘成普通 DOM 后字号/行高/圆角都跟页面同一套，键盘上下键与 Esc 也照常可用。
+   */
+  const [modelOpen, setModelOpen] = useState(false);
+  /** 键盘高亮的建议项下标（-1 = 没高亮） */
+  const [modelActive, setModelActive] = useState(-1);
   /** 手动检查更新的结果（托盘菜单也有入口，但那边是原生控件、字号小；设置页这个更显眼） */
   const [updateResult, setUpdateResult] = useState<
     undefined | { kind: 'checking' | 'newer' | 'latest' | 'error'; version?: string; url?: string; message?: string }
@@ -160,6 +172,21 @@ export function LocalPanel(): React.ReactElement {
   }, [loadModelOptions]);
 
   const keyNames = useMemo(() => (draft ? keyNamesOf(draft, balanceProviders) : []), [draft, balanceProviders]);
+
+  /** 当前服务商的全部模型建议 */
+  const modelChoices = useMemo(() => (draft ? (modelOptions[draft.provider] ?? []) : []), [modelOptions, draft]);
+  /**
+   * 输入时的过滤结果。
+   *
+   * 特例：输入框里已经是一个**完整模型名**（刚加载配置 / 刚选中）时不筛——用户点进来
+   * 是要换一个，列表得给全；否则"当前值 = 唯一命中"会让下拉看起来是空的。
+   */
+  const modelFiltered = useMemo(() => {
+    const keyword = (draft?.model ?? '').trim().toLowerCase();
+    if (!keyword) return modelChoices;
+    const hit = modelChoices.filter((id) => id.toLowerCase().includes(keyword));
+    return hit.length === 1 && hit[0]!.toLowerCase() === keyword ? modelChoices : hit;
+  }, [modelChoices, draft?.model]);
 
   const patch = (next: Partial<Draft>): void => setDraft((prev) => (prev ? { ...prev, ...next } : prev));
 
@@ -306,20 +333,64 @@ export function LocalPanel(): React.ReactElement {
 
         <div className="row">
           <label>模型</label>
-          <div style={{ display: 'flex', gap: 8, flex: 1 }}>
+          <div className="suggest">
             <input
               type="text"
-              list="dsh-pet-model-options"
               value={draft.model}
               placeholder="如 deepseek-flash / qwen-plus"
-              onChange={(event) => patch({ model: event.target.value })}
+              autoComplete="off"
+              onChange={(event) => {
+                patch({ model: event.target.value });
+                setModelOpen(true);
+                setModelActive(-1);
+              }}
+              onFocus={() => {
+                if (modelChoices.length > 0) {
+                  setModelOpen(true);
+                  setModelActive(-1);
+                }
+              }}
+              // 失焦即收（选中项走 onMouseDown + preventDefault，不会被这条抢在前面关掉）
+              onBlur={() => setModelOpen(false)}
+              onKeyDown={(event) => {
+                if (!modelOpen || modelFiltered.length === 0) return;
+                if (event.key === 'ArrowDown') {
+                  event.preventDefault();
+                  setModelActive((index) => (index + 1) % modelFiltered.length);
+                } else if (event.key === 'ArrowUp') {
+                  event.preventDefault();
+                  setModelActive((index) => (index <= 0 ? modelFiltered.length - 1 : index - 1));
+                } else if (event.key === 'Enter') {
+                  if (modelActive < 0) return;
+                  event.preventDefault();
+                  patch({ model: modelFiltered[modelActive]! });
+                  setModelOpen(false);
+                } else if (event.key === 'Escape') {
+                  setModelOpen(false);
+                }
+              }}
             />
-            {/* 建议来自端点 /models；没有建议时 datalist 为空，输入框退化成纯手填 */}
-            <datalist id="dsh-pet-model-options">
-              {(modelOptions[draft.provider] ?? []).map((id) => (
-                <option key={id} value={id} />
-              ))}
-            </datalist>
+            {modelOpen && modelFiltered.length > 0 ? (
+              <ul className="suggest-list" role="listbox" aria-label="模型建议">
+                {modelFiltered.map((id, index) => (
+                  <li
+                    key={id}
+                    role="option"
+                    aria-selected={index === modelActive}
+                    className={index === modelActive ? 'is-active' : ''}
+                    // mousedown 而不是 click：click 之前 input 已经 blur、列表已被收起
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      patch({ model: id });
+                      setModelOpen(false);
+                    }}
+                    onMouseEnter={() => setModelActive(index)}
+                  >
+                    {id}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </div>
         </div>
         {(modelOptions[draft.provider] ?? []).length > 0 ? (

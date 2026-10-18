@@ -3,7 +3,7 @@
 // 两件事都属于「有实现、没消费方」的历史问题：
 //   ① 版本检查此前**完全不存在**——免安装版没有任何"有新版本"的提示；
 //   ② `GET /models` 此前在应用里**一个调用方都没有**（设置页只调 /config），模型只能盲填。
-//      现在它给「模型」输入框提供 datalist 建议，这个用例从真实窗口的 DOM 里验证。
+//      现在它给「模型」输入框提供下拉建议（自绘，不用原生 datalist），这个用例从真实窗口的 DOM 里验证。
 //
 // 运行前：npm run build
 //   DSH_PET_ELECTRON=<一份 electron 可执行文件> npm run test:ui
@@ -120,18 +120,24 @@ test('版本检查提示 + 设置页模型建议', { skip: !executablePath, time
 
       // 设置页默认在「桌宠」页签，LocalPanel 要点了才挂载（挂载时才去拉 /models）
       await settings.getByRole('tab', { name: '本地服务' }).click();
+      // /models 是异步的：先等提示里的条数出现，再展开下拉——否则聚焦时清单还是空的，列表不会开
+      const loaded = await waitFor(() => settings.evaluate(() => document.body.innerText.includes('共 2 个')), 20000);
+      assert.ok(loaded, '/models 返回后，提示里应出现建议条数');
+      // 「模型」建议是**自绘**下拉（原生 datalist 的弹层不跟页面 zoom，150% 屏上只有 2/3 大），
+      // 数据不在 DOM 里，要聚焦输入框才展开
+      await settings.locator('.suggest input').click();
       const ready = await waitFor(
-        () => settings.evaluate(() => document.querySelectorAll('#dsh-pet-model-options option').length === 2),
-        20000,
+        () => settings.evaluate(() => document.querySelectorAll('.suggest-list li').length === 2),
+        5000,
       );
       const info = await settings.evaluate(() => ({
-        options: Array.from(document.querySelectorAll('#dsh-pet-model-options option')).map((el) => el.value),
+        options: Array.from(document.querySelectorAll('.suggest-list li')).map((el) => el.textContent?.trim() ?? ''),
         hasUpdateToggle: Boolean(
           Array.from(document.querySelectorAll('label')).find((el) => el.textContent?.includes('自动检查')),
         ),
         text: document.body.innerText,
       }));
-      assert.ok(ready, `datalist 必须有 2 个建议（实际：${JSON.stringify(info.options)}）`);
+      assert.ok(ready, `模型下拉必须有 2 个建议（实际：${JSON.stringify(info.options)}）`);
       assert.deepEqual(info.options.sort(), ['mock-a', 'mock-b']);
       assert.ok(info.hasUpdateToggle, '设置页必须有「自动检查」开关');
       assert.ok(info.text.includes('更新'), '设置页应有「更新」卡片');

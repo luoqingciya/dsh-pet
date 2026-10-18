@@ -8,7 +8,9 @@
  *   3. 设置页 bundle 不得留下裸 react import（应用里没有模块加载器）；
  *   4. 素材：待机动画池非空、表情包与配置对齐；
  *   5. 包体积上限（防误把母版/源视频塞进来）；
- *   6. 插件时代的字段必须已经清干净（dsh / peerDependencies / icon），否则会误导安装方式。
+ *   6. 插件时代的字段必须已经清干净（dsh / peerDependencies / icon），否则会误导安装方式；
+ *   7. 产物里不得出现 `@deepseek-ai/*`——项目已脱离 DSH，源码里若有人再 import，构建期会被
+ *      当成 external 留下裸 require（启动即崩），这里提前拦住。
  *
  * 用法：node scripts/prepack-check.js
  */
@@ -175,5 +177,16 @@ const leftovers = [
 ].filter(Boolean);
 if (leftovers.length > 0) fail(`package.json 仍残留插件字段：${leftovers.join(', ')}`);
 else ok('package.json 无插件残留字段');
+
+// ---- 7. 产物里不得残留 DSH 的包名 ----
+// 宿主半边原先静态 import 三个 @deepseek-ai/*，脱离 DSH 后已换成本地实现（src/host/standalone）。
+// tsdown 把 @deepseek-ai/* 全部按 external 处理：万一有人又 import，产物里会留下裸 require，
+// 装到用户机器上才炸（ERR_MODULE_NOT_FOUND）。在这里提前拦。
+const dshRefs = ['app-main.cjs', 'app-launch.js', 'app-settings.js', 'ensure-electron.js']
+  .map((name) => join(ROOT, 'lib', name))
+  .filter((file) => existsSync(file) && readFileSync(file, 'utf8').includes('@deepseek-ai/'));
+if (dshRefs.length > 0)
+  fail(`产物里残留 @deepseek-ai/* 引用：${dshRefs.map((f) => f.slice(ROOT.length + 1)).join(', ')}`);
+else ok('产物无 @deepseek-ai/* 残留');
 
 console.log(process.exitCode ? '[prepack-check] 未通过' : '[prepack-check] 全部通过');

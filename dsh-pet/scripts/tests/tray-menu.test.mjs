@@ -83,8 +83,17 @@ test('自绘托盘菜单：弹出、尺寸、点「退出」', { skip: !executab
         const el = document.querySelector('.dsh-pet-menu-column');
         if (!el) return null;
         const r = el.getBoundingClientRect();
-        return { width: Math.round(r.width), height: Math.round(r.height) };
+        return {
+          width: Math.round(r.width),
+          height: Math.round(r.height),
+          x: Math.round(r.x),
+          y: Math.round(r.y),
+          right: Math.round(r.right),
+          bottom: Math.round(r.bottom),
+          position: getComputedStyle(el).position,
+        };
       })(),
+      styleSheets: document.styleSheets.length,
       innerWidth: window.innerWidth,
       innerHeight: window.innerHeight,
       dpr: window.devicePixelRatio,
@@ -96,6 +105,35 @@ test('自绘托盘菜单：弹出、尺寸、点「退出」', { skip: !executab
       '菜单项与顺序必须与 TRAY_ITEMS 一致',
     );
     assert.ok(info.panel && info.panel.width > 100 && info.panel.height > 100, '菜单面板必须有实际尺寸');
+
+    // 回归（0.8.0 实机 bug：右键托盘"没反应"）：托盘菜单是**独立页面**，宠物窗那套
+    // MENU_CSS 注入（renderer.js）管不到它。少了这份样式，`.dsh-pet-menu-column` 退回
+    // 正常文档流（position:static），被 `#root{height:100%}` 顶到视口下方——窗口
+    // isVisible() 是 true、DOM 里也数得出 5 项，屏幕上却一个像素都没有。
+    // 所以只数 DOM 拦不住，必须断言「样式真的进来了」「面板落在视口内」「窗口真的画出了像素」。
+    assert.ok(info.styleSheets >= 2, `菜单样式必须注入（样式表数 ${info.styleSheets}）`);
+    assert.equal(info.panel?.position, 'absolute', '菜单面板必须是绝对定位（否则会掉出视口）');
+    assert.ok(
+      info.panel &&
+        info.panel.x >= 0 &&
+        info.panel.y >= 0 &&
+        info.panel.right <= info.innerWidth + 1 &&
+        info.panel.bottom <= info.innerHeight + 1,
+      `菜单面板必须整个落在窗口视口内（面板 ${JSON.stringify(info.panel)} / 视口 ${info.innerWidth}×${info.innerHeight}）`,
+    );
+
+    const painted = await app.evaluate(async ({ BrowserWindow }) => {
+      const win = BrowserWindow.getAllWindows().find((w) => w.getTitle().includes('托盘菜单'));
+      if (!win) return { opaque: 0, total: 1 };
+      const bmp = (await win.webContents.capturePage()).toBitmap();
+      let opaque = 0;
+      for (let i = 3; i < bmp.length; i += 4) if (bmp[i] > 0) opaque++;
+      return { opaque, total: bmp.length / 4 };
+    });
+    assert.ok(
+      painted.opaque > painted.total * 0.2,
+      `菜单窗口必须真的画出内容（不透明像素 ${painted.opaque}/${painted.total}；全透明＝屏幕上什么都没有）`,
+    );
 
     // 窗口尺寸 = 菜单尺寸 × uiScale（150% 屏上要放大，否则又回到"太小"）
     const bounds = await app.evaluate(({ BrowserWindow }) => {

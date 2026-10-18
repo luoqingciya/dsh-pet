@@ -3,7 +3,7 @@
  *
  * 为什么不装 `electron` 这个 devDependency：它的 postinstall 会下载 ~100MB 的运行时，
  * 而本项目**本来就不需要**再下一份（应用自带运行时；开发态由启动器准备一份到
- * `$DSH_HOME/electron`）。为几十行类型引入一次大下载不划算。
+ * `<用户缓存>/dsh-pet/electron`）。为几十行类型引入一次大下载不划算。
  *
  * 代价：这份声明必须与真实 API 保持同步。它只被 `src/app/main.ts` 与
  * `runtime/electron-helper/windows.js` 的调用方（src/app/desktop.ts）间接消费，
@@ -120,6 +120,16 @@ declare module 'electron' {
     openExternal(url: string): Promise<void>;
   };
 
+  /** `app.setLoginItemSettings` 的入参（只声明本项目用到的字段） */
+  interface LoginItemSettings {
+    /** 登录时启动 */
+    openAtLogin: boolean;
+    /** Windows：要注册的可执行文件（默认 `process.execPath`） */
+    path?: string;
+    /** Windows：跟在可执行文件后的参数（源码态要带主进程脚本） */
+    args?: string[];
+  }
+
   interface App {
     /** 是否运行在打包后的应用里（`false` = 开发态 `electron lib/app-main.cjs`） */
     readonly isPackaged: boolean;
@@ -129,6 +139,9 @@ declare module 'electron' {
     /** 覆盖 Electron 的路径（必须在 ready 之前调用）：本地应用用它把 profile 收进数据目录 */
     setPath(name: string, path: string): void;
     getVersion(): string;
+    /** 开机自启：Windows 写 HKCU 的 Run 项，macOS 写登录项（Linux 是空实现，见 autostart.ts） */
+    setLoginItemSettings(settings: LoginItemSettings): void;
+    getLoginItemSettings(options?: { path?: string; args?: string[] }): { openAtLogin: boolean };
     requestSingleInstanceLock(): boolean;
     whenReady(): Promise<void>;
     quit(): void;

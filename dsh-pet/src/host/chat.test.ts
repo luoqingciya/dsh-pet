@@ -5,7 +5,7 @@
  * - 只回标记不回正文 → 视为没选（否则气泡会空掉）。
  *
  * 解析函数住在 memes.ts（纯函数、无 LLM 依赖），故本测试只 import 它——
- * 避免拉起 chat.ts 的 @deepseek-ai/dsh-llm 依赖链。
+ * 避免拉起 chat.ts 的 LLM 生成依赖链。
  *
  * 跑法：node --experimental-strip-types --test src/host/chat.test.ts
  */

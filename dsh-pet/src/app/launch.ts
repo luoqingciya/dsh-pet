@@ -3,8 +3,8 @@
  * dsh-pet 本地应用启动器（Node 运行，不依赖 DSH）。
  *
  * 它只做三件事：
- *   1. 找 Electron（优先 `DSH_PET_ELECTRON_PATH`，其次本机缓存 `$DSH_HOME/electron`，
- *      都没有就下载一次——与插件桌面模式同一套解析与下载实现，不另写一份）；
+ *   1. 找 Electron（优先 `DSH_PET_ELECTRON_PATH`，其次本机缓存目录
+ *      `<缓存>/electron`，都没有就下载一次——与插件桌面模式同一套解析与下载实现，不另写一份）；
  *   2. 用这份 Electron 拉起 `lib/app-main.cjs`（主进程），把包根经环境变量传下去
  *      （主进程据此找 assets / lib / runtime，不依赖 cwd）；
  *   3. 透传退出码与信号。

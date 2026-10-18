@@ -26,7 +26,7 @@
  * （对话配图是点缀，不强制每句都带）。
  */
 
-import { BlockAssembler, createAssistantMessage, createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm';
+import { BlockAssembler, createAssistantMessage, createUserMessage, ReasoningEffortId } from './standalone/llm';
 import { PET_CALL_IDENTITY, noTextReason } from './llm-call';
 import { supportsReasoningOff } from './llm-reasoning';
 import { extractChatImage, memeCatalog, type MemeEntry } from './memes';

@@ -21,7 +21,7 @@
  * - 短超时（LLM 冷启动/慢响应时快速放弃，不留挂起请求）。
  */
 
-import { BlockAssembler, createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm';
+import { BlockAssembler, createUserMessage, ReasoningEffortId } from './standalone/llm';
 import { PET_CALL_IDENTITY, noTextReason } from './llm-call';
 import { supportsReasoningOff } from './llm-reasoning';
 import { withTimeContext } from './prompt';

@@ -15,7 +15,7 @@ dsh-pet 在本地 `127.0.0.1` 上起了一个 HTTP 服务，把所有能力挂�
 | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `GET /dsh-pet-7340/state`       | **轮询唯一数据源**：一次拿到说话、工作状态、系统通知、余额四类状态；另带 `configVersion`（配置版本指纹，变了就该重拉 `/config`） |
 | `GET /dsh-pet-7340/config`      | 读合并后的成品配置（内置默认 + 用户层，字段已填满）                                                                              |
-| `GET /dsh-pet-7340/config/meta` | 配置文件路径、各类数据落盘位置（设置页「存储」区用的就是它）                                                                     |
+| `GET /dsh-pet-7340/config/meta` | 配置文件与素材目录路径（设置页「存储」区用的就是它）                                                                             |
 | `GET /dsh-pet-7340/models`      | 可用服务商与模型清单（来自「本地服务」里配置的端点）                                                                             |
 | `GET /dsh-pet-7340/chat?pet=`   | 读某只桌宠最近的对话记忆窗口                                                                                                     |
 
@@ -104,7 +104,8 @@ curl -s -X POST "$BASE/work-status" \
 | `POST /shutdown` | 优雅停机：释放定时器与桌面窗口后关闭服务（脚本化停机用） |
 
 设置页与本地服务接口挂在 `/app/*`（`GET /app/api/config`、`POST /app/api/config`、
-`POST /app/api/test`、`POST /app/api/open-dir`、`POST /app/api/update-check`），同样不在 OpenAPI 契约里——
+`POST /app/api/test`、`POST /app/api/open-dir`、`POST /app/api/update-check`、
+`GET|POST /app/api/autostart`），同样不在 OpenAPI 契约里——
 它们是这个应用的内部界面，不是给第三方用的稳定接口。
 
 ## 相关

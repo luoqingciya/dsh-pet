@@ -15,9 +15,12 @@ import { cpSync, existsSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
+import { resolveDshHome } from '../host/standalone/home-paths';
+
 /** 应用数据根目录（= 宿主半边眼里的 DSH_HOME） */
 export function appHomeDir(): string {
-  return process.env.DSH_HOME || join(homedir(), '.dsh');
+  // 口径的唯一实现在 host/standalone/home-paths.ts（宿主半边也用它），这里只转调
+  return resolveDshHome();
 }
 
 /** 桌宠数据目录（配置 / 素材 / 记忆） */

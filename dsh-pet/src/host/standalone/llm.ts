@@ -1,22 +1,14 @@
 /**
- * `@deepseek-ai/dsh-llm` 的独立模式替身（消息工厂 / 文本块拼装 / reasoning 标识）。
+ * 宿主半边用到的 **LLM 消息原语**（本包自己的实现，不依赖任何外部框架）。
  *
- * 独立模式没有模型后端。`ctx.llm` 的替身（见 ../context.ts）让**没有显式配置模型**的调用在
- * 候选链阶段就失败：`agentDefaultModel.currentSelection()` 返回的 model 为空 →
- * `model-selection.ts` 的 `currentModel()` 判定为「未配置」→ `generateWhisper` / `generateChat`
- * 直接回 `{ ok: false, reason: 'provider-missing' }`。
+ * 这套原语原先来自 DSH 的 `@deepseek-ai/dsh-llm`（宿主半边是从插件时代沿用下来的）。
+ * 项目脱离 DSH 之后，源码不再 import 那个包，改为这里的一份最小实现——只有
+ * `whisper.ts` / `chat.ts` 真正用到的四个名字：两个消息工厂、文本块拼装器、reasoning 标识。
  *
- * **但这不是结构性保证。** 用户在配置里显式写了 `whisperModel` / `chatModel`（设置页选过模型
- * 就会写进配置）时，候选链非空，生成侧会真的走到本文件的消息构造与 `ctx.llm.stream`。
- * 所以本文件与 ctx.llm 替身的每一处形状都必须与 DSH 的真实契约一致 —— 0.3.4 的崩溃正是因为
- * `stream` 被当成"永远不走的那条路"，实现成返回 Promise 而契约要求 AsyncIterable
- * （细节见 ../context.ts 里 stream / resolveModelInfo 的注释）。
- *
- * 那为什么还要实现它们：`whisper.ts` / `chat.ts` 是**静态 import** 这四个名字的，
- * 模块图能加载是独立模式起得来的前提；同时保持它们是纯本地、零网络的实现，
- * 将来若有人给独立模式接上模型通道（例如自带 API key），这条路径可以照常工作。
- *
- * 只在独立模式构建里生效：`tsdown.config.mjs` 用 alias 把该包名指向本文件。
+ * **形状必须与真实契约一致**，不是"反正不会走到"就可以随便写：用户在设置页显式选过
+ * `whisperModel` / `chatModel` 时，候选链非空，生成侧会真的走到这里的消息构造与
+ * `ctx.llm.stream`。0.3.4 的崩溃正是因为把 `stream` 当成"永远不走的那条路"实现成返回 Promise，
+ * 而契约要求 AsyncIterable（细节见 `src/app/context.ts` 里 stream / resolveModelInfo 的注释）。
  */
 
 /** 消息的最小形状（只有角色、内容与来源标记；适配器回放不在独立模式范围内） */
@@ -45,9 +37,9 @@ export interface StandaloneTextBlock {
 /**
  * 流式文本拼装：收集文本块，并记录终止块给出的失败原因。
  *
- * 输入块兼容两种文本形状——`{type:'text-delta', text}`（DSH 适配器的增量块，测试里也用它）
- * 与 `{type:'text', text}`（本应用的 `llm-openai` 直接吐完整块）；`{type:'finish', reason}`
- * 是终止块：DSH 把适配器抛错**折进终止块**（流里不抛），调用方读 `finish` 生成失败文案。
+ * 输入块兼容两种文本形状——`{type:'text-delta', text}`（增量块）与
+ * `{type:'text', text}`（本应用的 `llm-openai` 直接吐完整块）；`{type:'finish', reason}`
+ * 是终止块：适配器抛错会被**折进终止块**（流里不抛），调用方读 `finish` 生成失败文案。
  */
 export class BlockAssembler {
   private readonly chunks: string[] = [];
@@ -75,7 +67,7 @@ export class BlockAssembler {
   }
 }
 
-/** reasoning effort 标识工厂（DSH 侧是枚举工厂，这里保持"传什么就是什么"） */
+/** reasoning effort 标识工厂（真实契约里是枚举工厂，这里保持"传什么就是什么"） */
 export function ReasoningEffortId(id: string): string {
   return id;
 }
