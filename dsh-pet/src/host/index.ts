@@ -73,7 +73,14 @@ import {
   userConfigUnparsable,
   type ConfigPaths,
 } from './config';
-import { reduceWorkStatus, currentTaskFromTodo, WorkStatusStore } from './work-status';
+import {
+  EXTERNAL_STATUS_SESSION,
+  WorkStatusStore,
+  currentTaskFromTodo,
+  parseExternalWorkStatus,
+  reduceWorkStatus,
+  type ExternalWorkStatusInput,
+} from './work-status';
 import {
   agentErrorFrame,
   hasBlockingActivity,
@@ -175,6 +182,42 @@ export function apply(ctx: any): void {
     publishedWork = key;
     state.writeSection('workStatus', { state: snap.state, task: snap.task });
   };
+  /**
+   * 外部状态灯（`POST /work-status`）：脚本 / IDE 插件 / CI / agent 把桌宠当一盏状态灯用。
+   *
+   * 为什么需要它：离开 DSH 之后，6 个档位里只有「思考 / 成功 / 出错」还能被真实事件触发，
+   * 另外三个（working / result / waiting）描述的是「agent 在调工具、在等你确认」——本地没有 agent。
+   * 与其让它们变成死档位，不如把入口开放出去：任何本机任务都能点亮这盏灯。
+   *
+   * 落地方式是**复用同一条链路**：写进同一个 WorkStatusStore（独立会话 id），
+   * 动画、气泡文案、优先级聚合、终态清理全部沿用，渲染端零改动。
+   */
+  let externalClearTimer: ReturnType<typeof setTimeout> | undefined;
+  const applyExternalStatus = (input: ExternalWorkStatusInput): void => {
+    // 每次写入都重排 TTL：后一次写入代表"任务还在继续"，不该被上一条的定时器提前清掉
+    if (externalClearTimer) {
+      clearTimeout(externalClearTimer);
+      externalClearTimer = undefined;
+    }
+    if (input.state === null) {
+      if (workStatus.clear(EXTERNAL_STATUS_SESSION)) publishWorkStatus();
+      return;
+    }
+    // 先扫掉别处遗留的终态（对话刚结束的成功/出错会挂 60s）：它们的优先级高于 working，
+    // 不扫就会出现"灯点亮了，宠物还在演上一轮结果"。
+    workStatus.clearTerminal(EXTERNAL_STATUS_SESSION);
+    workStatus.setState(EXTERNAL_STATUS_SESSION, input.state, Date.now());
+    workStatus.setTask(EXTERNAL_STATUS_SESSION, input.text);
+    publishWorkStatus();
+    if (input.ttlSec > 0) {
+      externalClearTimer = setTimeout(() => {
+        externalClearTimer = undefined;
+        if (workStatus.clear(EXTERNAL_STATUS_SESSION)) publishWorkStatus();
+      }, input.ttlSec * 1000);
+      externalClearTimer.unref?.();
+    }
+  };
+
   // 系统通知帧：宿主监听应用投进来的会话事件（turn/end、agent/error）生成通知帧
   // （帧契约与 shared/notify.ts 一致），写进 S 的 sections.notify；应用主进程轮询到变化后
   // 弹原生通知（见 src/app/notifications.ts）。
@@ -855,6 +898,27 @@ export function apply(ctx: any): void {
       return { kind: 'json', status: 200, obj: { ok: true } };
     }
 
+    // 本机任务状态灯：/dsh-pet-7340/work-status（POST）
+    // 任何脚本 / IDE 插件 / CI / agent 都能把桌宠当状态灯用：
+    //   {"state":"working","text":"跑测试","ttlSec":600}   → 切「干活」并显示自定义文案
+    //   {"state":null}                                    → 清空，回到空闲
+    // state 的 6 个档位与 animations.events.workStatus 索引一致；text 覆盖档位气泡文案；
+    // ttlSec 缺省 900 秒（脚本崩了也不会让宠物永远卡在「干活」），0 = 不自动清。
+    // 落到同一个 WorkStatusStore（会话 id = dsh-pet-external），动画与气泡零新增代码。
+    if (rest === 'work-status') {
+      if (method !== 'POST') return { kind: 'json', status: 405, obj: { error: 'method not allowed' } };
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(body ?? 'null');
+      } catch {
+        return { kind: 'json', status: 400, obj: { ok: false, error: 'invalid JSON body' } };
+      }
+      const parsedStatus = parseExternalWorkStatus(parsed);
+      if (!parsedStatus.ok) return { kind: 'json', status: 400, obj: { ok: false, error: parsedStatus.message } };
+      applyExternalStatus(parsedStatus.value);
+      return { kind: 'json', status: 200, obj: { ok: true, state: workStatus.snapshot().state } };
+    }
+
     // 碎碎念：/dsh-pet-7340/whisper?pet=<id>（POST = 立即让桌宠新说一句，返回 {ok}）
     // 动作端点，**不返回文本**——文本走 S 的 pets.<id>.say（碎碎念/命令气泡/对话回复同一个叶子）。
     // 手动语义不受 whisperEnabled 门控：那个字段只关自动周期（与改造前一致）。
@@ -1347,6 +1411,10 @@ export function apply(ctx: any): void {
   // 随宿主生命周期清理：销毁全部桌面窗口
   ctx.effect(() => () => {
     disposed = true;
+    if (externalClearTimer) {
+      clearTimeout(externalClearTimer);
+      externalClearTimer = undefined;
+    }
     stopDesktop('host-dispose');
   });
 

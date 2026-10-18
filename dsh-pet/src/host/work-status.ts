@@ -181,6 +181,27 @@ export class WorkStatusStore {
     return true;
   }
 
+  /**
+   * 清掉**所有终态**条目（success / error），可排除一个会话。
+   *
+   * 用途：外部状态灯写入时先扫掉别处遗留的"刚结束"标记——终态条目只是展示残留（60s 后自己也会清），
+   * 但它的优先级高于 working/thinking，不扫掉就会出现"点亮了灯，宠物却还在演上一轮的成功/出错"。
+   * 进行中的档位（thinking/working/result/waiting）不动：那是真的在干活，该按优先级竞争。
+   *
+   * @returns 是否真的清了东西（调用方据此决定要不要 publish）
+   */
+  clearTerminal(exceptId?: string): boolean {
+    let changed = false;
+    for (const [id, entry] of [...this.sessions]) {
+      if (id === exceptId) continue;
+      if (entry.state !== 'success' && entry.state !== 'error') continue;
+      this.sessions.delete(id);
+      changed = true;
+    }
+    if (changed) this.refresh();
+    return changed;
+  }
+
   /** 清掉某会话（回合结束 / 终态过期）：它的 task 一并消失，不会残留到后续活动里 */
   clear(sessionId: string): boolean {
     if (!this.sessions.delete(sessionId)) return false;
@@ -203,4 +224,98 @@ export class WorkStatusStore {
     this.snap.task = nextTask;
     this.snap.ts = Date.now();
   }
+}
+
+// ---------- 外部状态灯（POST /work-status）----------
+//
+// 离开 DSH 之后，6 个档位里只有 3 个还能被真实事件触发（思考 / 成功 / 出错），另外三个
+// （working / result / waiting）描述的是「agent 在调工具、在等你确认」——本地没有 agent。
+// 与其把它们当死代码删掉，不如把**入口开放出去**：任何脚本 / IDE 插件 / CI / agent 都能
+// 让桌宠显示当前任务状态，桌宠重新变成一盏"本机任务状态灯"。
+//
+// 事件源从 DSH 会话换成了 HTTP，但落到同一份 WorkStatusStore → 同一套动画与气泡文案，
+// 所以「联动」重新有意义，且不需要为外部状态另写一条渲染链。
+
+/** 外部状态灯的会话 id（与对话会话分开：两者可以同时活跃，按优先级聚合） */
+export const EXTERNAL_STATUS_SESSION = 'dsh-pet-external';
+
+/**
+ * 默认存活时间（秒）：调用方忘了清（脚本崩了、CI 被取消）时，宠物不会永远卡在「干活」里。
+ * 15 分钟覆盖绝大多数单步任务；更长的任务显式传 ttlSec 即可。
+ */
+export const EXTERNAL_STATUS_DEFAULT_TTL_SEC = 900;
+
+/** 上限（秒）：一天。再长就失去了"自动清"的意义，直接拒绝更诚实。 */
+export const EXTERNAL_STATUS_MAX_TTL_SEC = 86400;
+
+/** 外部状态灯的一次写入（已校验） */
+export interface ExternalWorkStatusInput {
+  /** null = 清空（回到空闲） */
+  state: HostWorkStatusState | null;
+  /** 气泡文案（覆盖档位文案）；null = 用配置里的档位文案 */
+  text: string | null;
+  /** 自动清空时间（秒）；0 = 不自动清 */
+  ttlSec: number;
+}
+
+/** 校验结果：ok=false 时 message 直接回给调用方（不吞错） */
+export type ExternalWorkStatusParse = { ok: true; value: ExternalWorkStatusInput } | { ok: false; message: string };
+
+const EXTERNAL_STATES: readonly HostWorkStatusState[] = [
+  'thinking',
+  'working',
+  'result',
+  'waiting',
+  'success',
+  'error',
+];
+
+/**
+ * 校验 `POST /work-status` 的请求体。
+ *
+ * 严格口径（与 /anim、/broadcast 一致）：不认识的状态直接报错，绝不"猜一个最近的档位"——
+ * 猜错的表现是"宠物演了一段奇怪的动画"，比一句明确的 400 难查得多。
+ *
+ * @param body 已解析的 JSON（非对象一律失败）
+ */
+export function parseExternalWorkStatus(body: unknown): ExternalWorkStatusParse {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return { ok: false, message: '请求体必须是 JSON 对象，例如 {"state":"working","text":"跑测试"}' };
+  }
+  const o = body as Record<string, unknown>;
+  if (!('state' in o)) {
+    return { ok: false, message: `state 必填：${EXTERNAL_STATES.join(' / ')} / null（清空）` };
+  }
+  const rawState = o.state;
+  if (rawState !== null && !EXTERNAL_STATES.includes(rawState as HostWorkStatusState)) {
+    return {
+      ok: false,
+      message: `state 只能是 ${EXTERNAL_STATES.join(' / ')} 或 null，收到 ${JSON.stringify(rawState)}`,
+    };
+  }
+  const state = rawState as HostWorkStatusState | null;
+
+  let text: string | null = null;
+  if (o.text !== undefined && o.text !== null) {
+    if (typeof o.text !== 'string') return { ok: false, message: 'text 必须是字符串' };
+    const points = Array.from(o.text.trim());
+    text =
+      points.length === 0
+        ? null
+        : points.length > TASK_TEXT_MAX
+          ? `${points.slice(0, TASK_TEXT_MAX).join('')}…`
+          : points.join('');
+  }
+
+  let ttlSec = EXTERNAL_STATUS_DEFAULT_TTL_SEC;
+  if (o.ttlSec !== undefined && o.ttlSec !== null) {
+    const n = Number(o.ttlSec);
+    if (!Number.isFinite(n) || n < 0) return { ok: false, message: 'ttlSec 必须是 >= 0 的数字（0 = 不自动清）' };
+    if (n > EXTERNAL_STATUS_MAX_TTL_SEC) {
+      return { ok: false, message: `ttlSec 上限 ${EXTERNAL_STATUS_MAX_TTL_SEC} 秒（一天）` };
+    }
+    ttlSec = Math.floor(n);
+  }
+
+  return { ok: true, value: { state, text, ttlSec } };
 }

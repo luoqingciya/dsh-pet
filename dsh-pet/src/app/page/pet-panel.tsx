@@ -436,7 +436,7 @@ export function PetPanel(): ReactElement {
                     checked={current.workStatusEnabled}
                     onChange={(event) => patch({ workStatusEnabled: event.target.checked })}
                   />
-                  对话状态联动
+                  状态灯
                 </label>
                 <label className="chk">
                   <input
@@ -448,10 +448,13 @@ export function PetPanel(): ReactElement {
                 </label>
               </div>
             </div>
+            <p className="hint">余额动画需要「本地服务」里配好对应服务商的密钥；碎碎念与对话用那里配置的模型。</p>
             <p className="hint">
-              余额动画需要「本地服务」里配好对应服务商的密钥；碎碎念与对话用那里配置的模型；
-              状态联动会在它回话时切「思考 / 成功 / 出错」；「待在原地」只是不让它自己走开，点播与拖拽照常。
+              状态灯：它回话时切「思考 / 成功 / 出错」；也可以由任何脚本点亮——
+              <code>POST /dsh-pet-7340/work-status</code> 带上 <code>state</code> 与可选 <code>text</code>， 6
+              个档位（思考 / 干活 / 收尾 / 等你确认 / 成功 / 出错）齐全，用法见 README。
             </p>
+            <p className="hint">「待在原地」只是不让它自己走开，点播与拖拽照常。</p>
           </>
         ) : (
           <p className="hint">还没有宠物，点「添加宠物」创建一只。</p>

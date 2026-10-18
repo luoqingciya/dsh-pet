@@ -12,7 +12,10 @@ import assert from 'node:assert/strict';
 
 import {
   currentTaskFromTodo,
+  parseExternalWorkStatus,
   reduceWorkStatus,
+  EXTERNAL_STATUS_DEFAULT_TTL_SEC,
+  EXTERNAL_STATUS_MAX_TTL_SEC,
   TASK_TEXT_MAX,
   WorkStatusStore,
   type HostWorkStatusState,
@@ -178,5 +181,71 @@ describe('WorkStatusStore —— 按会话聚合与展示（issue #59）', () =>
       s.setState('high', order[i], 1);
       assert.equal(s.snapshot().state, order[i], `${order[i]} 应压过 ${order[i + 1]}`);
     }
+  });
+});
+
+describe('外部状态灯 —— 请求体校验（POST /work-status）', () => {
+  test('六个档位与 null 都接受', () => {
+    for (const state of ['thinking', 'working', 'result', 'waiting', 'success', 'error', null]) {
+      const r = parseExternalWorkStatus({ state });
+      assert.equal(r.ok, true, `${state} 应被接受`);
+      if (r.ok) assert.equal(r.value.state, state);
+    }
+  });
+
+  test('缺 state / 未知 state / 非对象 → 失败且带可读消息', () => {
+    for (const body of [{}, { state: 'busy' }, null, [], 'working']) {
+      const r = parseExternalWorkStatus(body);
+      assert.equal(r.ok, false, `${JSON.stringify(body)} 应被拒绝`);
+      if (!r.ok) assert.ok(r.message.length > 0, '必须给出原因（不吞错）');
+    }
+  });
+
+  test('text：trim 后为空 → null；超长按码点截断（不劈开 emoji）', () => {
+    const empty = parseExternalWorkStatus({ state: 'working', text: '   ' });
+    assert.ok(empty.ok && empty.value.text === null);
+
+    const long = '跑'.repeat(TASK_TEXT_MAX + 10);
+    const r = parseExternalWorkStatus({ state: 'working', text: long });
+    assert.ok(r.ok);
+    assert.equal(Array.from(r.value.text ?? '').length, TASK_TEXT_MAX + 1, '截断后应含省略号');
+
+    const emoji = parseExternalWorkStatus({ state: 'working', text: '🚀'.repeat(3) });
+    assert.ok(emoji.ok && emoji.value.text === '🚀🚀🚀', '代理对不得被劈成半个字符');
+
+    const bad = parseExternalWorkStatus({ state: 'working', text: 123 });
+    assert.equal(bad.ok, false);
+  });
+
+  test('ttlSec：缺省 900、0 表示不自动清、上限一天、负数与非数字拒绝', () => {
+    const def = parseExternalWorkStatus({ state: 'working' });
+    assert.ok(def.ok && def.value.ttlSec === EXTERNAL_STATUS_DEFAULT_TTL_SEC);
+
+    const never = parseExternalWorkStatus({ state: 'working', ttlSec: 0 });
+    assert.ok(never.ok && never.value.ttlSec === 0);
+
+    const tooLong = parseExternalWorkStatus({ state: 'working', ttlSec: EXTERNAL_STATUS_MAX_TTL_SEC + 1 });
+    assert.equal(tooLong.ok, false);
+
+    for (const ttl of [-1, 'abc']) {
+      assert.equal(parseExternalWorkStatus({ state: 'working', ttlSec: ttl }).ok, false);
+    }
+  });
+});
+
+describe('WorkStatusStore.clearTerminal —— 点灯前扫掉遗留终态', () => {
+  test('清掉 success/error，保留进行中档位，可排除指定会话', () => {
+    const s = new WorkStatusStore();
+    s.setState('chat', 'error', 1);
+    s.setState('other', 'success', 2);
+    s.setState('busy', 'working', 3);
+    s.setState('ext', 'success', 4);
+
+    assert.equal(s.clearTerminal('ext'), true, '应清掉 chat 与 other');
+    assert.equal(s.stateOf('chat'), undefined);
+    assert.equal(s.stateOf('other'), undefined);
+    assert.equal(s.stateOf('busy'), 'working', '进行中的档位不得被清');
+    assert.equal(s.stateOf('ext'), 'success', '被排除的会话保留');
+    assert.equal(s.clearTerminal('ext'), false, '没有可清的 → 返回 false（调用方据此不 publish）');
   });
 });

@@ -77,7 +77,7 @@ Windows 直接双击仓库里的 `dsh-pet.cmd`；macOS / Linux 运行 `./dsh-pet
 - **右键菜单**：动作 → 分类 → 具体动画任意点播；工具项：打开设置 / 查看余额 / 碎碎念 / 对话 / 回到初始位置 / 重载配置
 - **余额展示**：按已用百分比分档播动画 + 头顶气泡（DeepSeek 余额 / OpenCode Zen Go 与 Command Code 的额度窗口）
 - **碎碎念与对话**：按周期自动生成一句；右键随时开口；对话有记忆（落盘、重启不丢）
-- **工作状态**：它回话时切「思考 → 成功 / 出错」，常驻气泡
+- **状态灯**：回话时切「思考 → 成功 / 出错」；也能由任何脚本点亮——本机任务跑到哪一步，桌宠就演哪一档
 - **系统通知**：回话完成 / 生成失败、余额告急时弹原生通知
 - **自定义**：往数据目录丢 VP9-alpha `.webm` 就是新动画；`pet/` 下建配置就能加**全新宠物种类**
 - **无障碍**：支持 `prefers-reduced-motion`（减少动效时跳过 Q 弹与淡入）
@@ -189,6 +189,25 @@ Windows 直接双击仓库里的 `dsh-pet.cmd`；macOS / Linux 运行 `./dsh-pet
 - 一览：[`API.md`](API.md)
 - 完整契约（OpenAPI 3.1，可导入 Swagger UI / Postman）：[`openapi.yaml`](openapi.yaml)
 - 控制台：`node tools/api-tester.cjs`
+
+### 把它当状态灯用
+
+6 个档位（思考 / 干活 / 收尾 / 等你确认 / 成功 / 出错）原本是给 agent 会话用的。
+现在没有 agent 了，于是把入口开放出来：任何脚本、IDE 插件、CI 都能点亮它。
+
+```sh
+node tools/pet-status.mjs working "跑测试"     # 切「干活」，气泡显示「跑测试」
+node tools/pet-status.mjs success              # 切「成功」
+node tools/pet-status.mjs clear                # 熄灭，回到空闲
+
+# 或者直接用接口（不依赖仓库里的脚本）
+curl -s -X POST http://127.0.0.1:7340/dsh-pet-7340/work-status \
+     -H 'content-type: application/json' \
+     -d '{"state":"waiting","text":"等你确认一下"}'
+```
+
+`ttlSec`（默认 900 秒）到期自动熄灭——脚本崩了也不会让宠物永远卡在「干活」里。
+状态是全局的，只有开了设置里「状态灯」开关的宠物会演。
 
 ---
 

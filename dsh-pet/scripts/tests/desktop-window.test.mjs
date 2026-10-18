@@ -131,6 +131,35 @@ test('desktop window: 渲染端拿到配置、画出宠物、视频真的在播'
       assert.ok(changed, '桌面宠物聊天必须触发对话状态联动与通知帧');
       assert.equal(after.sections.workStatus.data.state, 'error', '没有 API Key → 状态应为 error');
     });
+    // 外部状态灯（POST /work-status）：任何脚本都能点亮桌宠，文案要落到气泡上
+    await t.test('外部状态灯能点亮桌宠并显示自定义文案', async () => {
+      const origin = await petPage.evaluate(() => new URL(CONFIG.configUrl).origin);
+      const post = (body) =>
+        fetch(origin + '/dsh-pet-7340/work-status', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+
+      const res = await post({ state: 'working', text: '跑测试', ttlSec: 60 });
+      assert.equal(res.status, 200, '状态灯写入应被受理');
+
+      const shown = await waitFor(
+        () =>
+          petPage.evaluate(() => (document.querySelector('.pet-bubble.is-on')?.textContent || '').includes('跑测试')),
+        10000,
+      );
+      assert.ok(shown, '气泡必须显示外部传入的文案（text 覆盖档位文案）');
+
+      const cleared = await post({ state: null });
+      assert.equal(cleared.status, 200, '清空应被受理');
+      const gone = await waitFor(
+        () =>
+          petPage.evaluate(() => !(document.querySelector('.pet-bubble.is-on')?.textContent || '').includes('跑测试')),
+        10000,
+      );
+      assert.ok(gone, '清空后气泡文案必须消失');
+    });
   } finally {
     await app.close().catch(() => {});
   }

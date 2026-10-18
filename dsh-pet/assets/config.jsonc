@@ -95,10 +95,13 @@
   // 仅影响桌面模式（浏览器 overlay 本来就只在视口内弹）。改动后刷新或重启生效。
   "confineToScreen": false,
   // ===================== 工作状态联动文案（条目级，与 animations/physics 同级；种类文件 pet/<名>-config.json 顶层可覆盖） =====================
-  // 工作状态气泡文本（pets[].workStatusEnabled 开启时展示；仅在 events.workStatus 动画触发时弹）。
+  // 状态灯气泡文本（pets[].workStatusEnabled 开启时展示；仅在 events.workStatus 动画触发时弹）。
   // 结构 = 二维数组，外层索引即档位（与 events.workStatus 动画索引一一对应，勿在中间插入新档）：
-  //   0 thinking（turn/start）/ 1 working（tool/call）/ 2 result（tool/result）/
-  //   3 waiting（approval/asked）/ 4 success（turn/end completed）/ 5 error（turn/end error/max-tokens）
+  //   0 thinking（turn/start）/ 1 working（工具调用）/ 2 result（工具返回）/
+  //   3 waiting（等确认）/ 4 success（turn/end completed）/ 5 error（turn/end error/max-tokens）
+  // 0/4/5 由对话本身触发；1/2/3 由**外部状态灯**触发（POST /dsh-pet-7340/work-status，
+  // 任何脚本/IDE/CI 都能点亮——离开 DSH 后本地没有 agent，这三档靠外部驱动）。
+  // 外部传了 text 时优先显示 text，本表只作缺省文案。
   // 每档内是多个备选句，播放时随机抽一句（想固定单句就只写一个；想换文案只改这里）。
   // 省略整个字段 = 不弹工作状态气泡文本（仍播动画）；省略某档 = 该档不显示文本。
   "workStatusTexts": [
