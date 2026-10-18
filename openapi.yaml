@@ -2,11 +2,11 @@ openapi: 3.1.0
 
 info:
   title: dsh-pet HTTP API
-  version: 0.6.1
+  version: 0.6.2
   summary: dsh-pet 本地 HTTP 接口
   description: |
     dsh-pet 在本地 `127.0.0.1` 上起一个 HTTP 服务，把全部能力挂在**一条前缀路由** `/dsh-pet-7340` 下。
-    桌面透明窗（经 bridge 管道）与设置页消费的是同一份实现（`handlePetRoute`）。
+    桌面透明窗（经 `dsh-pet-bridge://` scheme）与设置页消费的是同一份实现（`handlePetRoute`）。
     本文件是该路由的公开契约：任何第三方脚本都可以按此访问桌宠能力。
 
     ## 部署形态
@@ -17,8 +17,9 @@ info:
       （默认 7340，被占用会自动顺延；可用 `--port` 或 `DSH_PET_APP_PORT` 指定）。
     - 只监听 **127.0.0.1**，不对外网暴露，也**没有任何鉴权**：任何能访问本机该端口的进程都能调用。
       请勿把该端口转发/代理到公网。
-    - 桌面透明窗不走 HTTP，而是 `dsh-pet-bridge://` 自定义 scheme 经主进程管道转发到**同一个**
-      `handlePetRoute`。所以下表所有路径对两种访问方式行为完全一致。
+    - 桌面透明窗不走 HTTP，而是 `dsh-pet-bridge://` 自定义 scheme，由主进程的
+      `protocol.handle` **直接调用**同一个 `handlePetRoute`（同进程函数调用，不经网络、不经管道）。
+      所以下表所有路径对两种访问方式行为完全一致。
 
     ## 两分钟上手
 
@@ -143,7 +144,7 @@ paths:
       operationId: refreshBalance
       summary: 立即刷新一次余额
       description: |
-        用**当前对话的服务商**（`ctx.agentDefaultModel.currentSelection()`）查一次余额，
+        用**「本地服务」里配置的余额服务商**（未单独指定时跟随模型服务商）查一次余额，
         并把结果写进 `sections.balance`。这是 `POST` 动作端点，**不返回余额数据**。
 
         - 余额不可用时（服务商不支持 / 缺凭证 / 抓取失败）同样写入 S，
@@ -178,8 +179,8 @@ paths:
           本端点返回 `{ ok: false, reason: 'generate-error' }`。
         - 若该宠物条目开启了 `whisperImageEnabled` 且表情包池非空，
           会随机抽一张配图，随文本一起写进叶子的 `image` 字段。
-        - 模型选择：条目配置的 `whisperModel` 优先；留空则跟随当前对话的模型。
-          指定模型生成失败时会**自动回落到当前对话的模型**重试一次。
+        - 模型选择：条目配置的 `whisperModel` 优先；留空则跟随「本地服务」配置的模型。
+          指定模型生成失败时会**自动回落到「本地服务」配置的模型**重试一次。
       parameters:
         - $ref: "#/components/parameters/PetIdQuery"
       responses:
@@ -530,8 +531,8 @@ paths:
 
         - 文本会 `trim()`，空文本 → `{ ok: false, reason: 'bad-request' }`。
         - 文本超过 **2000 字** → `{ ok: false, reason: 'bad-request' }`。
-        - 模型选择：条目配置的 `chatModel` 优先；留空则跟随当前对话的模型。
-          指定模型生成失败时会**自动回落到当前对话的模型**重试一次。
+        - 模型选择：条目配置的 `chatModel` 优先；留空则跟随「本地服务」配置的模型。
+          指定模型生成失败时会**自动回落到「本地服务」配置的模型**重试一次。
         - 记忆只存**正文**：配图属展示层，不进上下文（否则下次请求会把标记当历史读回去）。
       parameters:
         - $ref: "#/components/parameters/PetIdQuery"
@@ -878,7 +879,7 @@ paths:
       summary: 重载桌面端（重建全部宠物窗口）
       description: |
         按磁盘上的最新配置重建全部桌面宠物窗口（手改配置文件后用它生效）。
-        与保存配置走**同一条**重启路径（串行队列 + 等旧进程真正退出再起新的），
+        与保存配置走**同一条**重建路径（串行队列：销毁全部窗口 → 按最新配置重建），
         因此宠物数量 / `display` / `size` 的变化同样生效。
 
         **注意**：窗口会被销毁重建，正在进行的窗口内交互会中断。
@@ -1541,7 +1542,7 @@ components:
       type: object
       description: |
         条目级的模型指定。**`provider` 与 `model` 必须同时为空或同时非空**——
-        两个都留空 = 跟随当前对话的模型；只填一个视为无效配置。
+        两个都留空 = 跟随「本地服务」配置的模型；只填一个视为无效配置。
       required: [provider, model]
       properties:
         provider:

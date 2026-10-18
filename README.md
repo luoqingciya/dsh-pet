@@ -92,7 +92,7 @@ Windows 直接双击仓库里的 `dsh-pet.cmd`；macOS / Linux 运行 `./dsh-pet
 ### 桌宠
 
 每只宠物独立配置：名字、大小、**是否显示在桌面**、贴哪个角与偏移、四个功能开关
-（余额动画 / 碎碎念 / 对话状态联动 / 待在原地）。
+（余额动画 / 碎碎念 / 状态灯 / 待在原地）。
 全局配置：配图开关、抛掷锁定屏幕、字体与字号、对话记忆轮数、拖拽手感（重力 / 弹性 / 摩擦 / 力度 / 互撞）。
 
 ### 本地服务
@@ -102,7 +102,7 @@ Windows 直接双击仓库里的 `dsh-pet.cmd`；macOS / Linux 运行 `./dsh-pet
 | 项         | 说明                                                                                                            |
 | ---------- | --------------------------------------------------------------------------------------------------------------- |
 | 服务商     | DeepSeek 官方 / Ollama（本机）/ OpenAI / 阿里云百炼（通义千问）/ 自定义（OpenAI 兼容）                          |
-| 模型       | 如 `deepseek-flash`、`deepseek-v4-pro`、`qwen-plus`、`qwen2.5:7b`；留空则从端点的 `/models` 自动拉取            |
+| 模型       | 如 `deepseek-flash`、`deepseek-v4-pro`、`qwen-plus`、`qwen2.5:7b`；**必填**（预设里已填好，换服务商时按需改） |
 | 接口地址   | OpenAI 兼容根地址（不带 `/chat/completions`）                                                                   |
 | API Key    | 存在本机 `secrets.json`，**用系统密钥加密**（Windows DPAPI / macOS 钥匙串 / Linux libsecret）；只写不读、不回显 |
 | 余额服务商 | 默认跟随模型服务商，也可单独指定（对话走 Ollama、余额查 DeepSeek）                                              |
@@ -173,12 +173,15 @@ Windows 直接双击仓库里的 `dsh-pet.cmd`；macOS / Linux 运行 `./dsh-pet
 
 ```
 <数据目录>/dsh-pet/pet/
-├─ pig-config.json      ← 与主配置同构（pets / animations / animationWeights 必须写全）
+├─ pig-config.json      ← 与主配置同构；**只写要覆盖的顶层字段**，没写的取内置默认
 └─ pig-animation/       ← 这个种类自己的素材，平铺放 .webm
 ```
 
 扫描 `pet/` 自动发现，桌面同时生效；一个种类文件可放任意多只实例，共享同一套素材。
 设置页只列出主宠物；文件宠物改完右键「重载配置」即生效。
+
+> 顶层字段是**整段替换**：写了 `animations` 就整段用自己的（缺的子键不会从内置默认补回来）。
+> 所以新种类通常要自己写一份 `animations` / `animationWeights`，否则会沿用主宠物的动画池。
 
 ---
 
@@ -307,7 +310,8 @@ npm run app             # 构建并启动
 npm run app:package     # 免安装 zip 的内容目录：dist/dsh-pet-app/
 npm run app:installer   # Windows 安装包（NSIS）：dist/installer/dsh-pet-<版本>-win-x64-setup.exe
 npm run app:smoke       # 端到端冒烟（需要应用已在运行）
-npm test                # 单元测试
+npm test                # 单元测试（纯逻辑 + 源码守卫）
+npm run test:ui         # 真机 UI 回归（需 DSH_PET_ELECTRON 指向一份 Electron）
 ```
 
 CI（`.github/workflows/build.yml`）在 Windows / macOS / Linux 上构建免安装版并上传；

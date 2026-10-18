@@ -35,6 +35,7 @@ import { createAppContext } from './context';
 import { readAppConfig, readSecrets } from './local-config';
 import type { LlmService } from './llm-openai';
 import { migrateLegacyData, petDataDir } from './paths';
+import { portFromArgv } from './port-arg';
 import { encryptionAvailable, setSecretCodec } from './secrets';
 import { startNotifyWatcher } from './notifications';
 import { createWebUi } from './web-ui';
@@ -115,6 +116,23 @@ const IS_DPI_PROBE = process.argv.includes('--dpi-probe');
 // ProcessSingleton 锁（"profile in use"）。它只需要 screen 模块，与 profile 无关。
 if (IS_DPI_PROBE) {
   app.setPath('userData', join(app.getPath('temp'), 'dsh-pet-dpi-probe'));
+}
+
+/**
+ * 命令行端口：`dsh-pet.exe --port 7500` / `--port=7500`（解析见 `./port-arg`）。
+ *
+ * 为什么应用本体也要认（`src/app/launch.ts` 早就认了）：README / API.md / openapi 都写着
+ * 「可用 `--port` 指定」，而打包版**直接跑本文件**、不经过启动器——从前它只读环境变量，
+ * 于是 `dsh-pet.exe --port 7500` 静默无效（文档承诺、实际不生效）。免安装版用户恰恰最需要它
+ * （同一台机器想开两个实例、或 7340 被别的东西占了）。
+ */
+function resolvePort(): number {
+  const parsed = portFromArgv(process.argv);
+  if (parsed.port !== undefined) return parsed.port;
+  if (parsed.raw !== undefined) {
+    log.warn(`--port 需要 1..65535 的整数，收到 ${JSON.stringify(parsed.raw)}，已忽略并回落默认端口`);
+  }
+  return Number(process.env.DSH_PET_APP_PORT ?? 7340);
 }
 
 /**
@@ -378,7 +396,7 @@ async function bootstrap(): Promise<void> {
   server = await listenAppServer({
     routes,
     logger: log,
-    port: Number(process.env.DSH_PET_APP_PORT ?? 7340),
+    port: resolvePort(),
     status: () => ({
       name: 'dsh-pet-app',
       version: appVersion(),

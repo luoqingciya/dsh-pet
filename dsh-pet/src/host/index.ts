@@ -103,7 +103,7 @@ import {
   sendText,
   type RouteResult,
 } from './http';
-import { timeContextOf } from './time-context';
+import { petSystemPrompt, withTimeContext } from './prompt';
 import type { DesktopRequest, DesktopResponse, PetDesktop } from './desktop-api';
 import { electronLandingDir } from '../app/electron-runtime';
 
@@ -353,21 +353,8 @@ export function apply(ctx: any): void {
 
   // ---- 配置消费：唯一入口 readAllConfig（./config）——返回值绝对正确，这里只读字段，零校验 ----
 
-  /** 某宠物的最终人设 system：所属条目（非文件宠物 → main 条目）的 whisperPrompt（合并器已填默认）
-   *  + 无条件追加一句名字声明（name，缺失已按 id）——碎碎念与对话共用同一拼装。
-   *  + 末尾追加一行**时间背景**（time-context.ts：日期/星期/时刻/时段/工作日或周末）：
-   *    碎碎念与对话各自每次生成都会重新走这里，所以拿到的永远是**当前**时刻，不需要额外的刷新机制；
-   *    非法 Date 时它为空串，此时整行不加（宁可没有时间信息，也不把 NaN 拼进提示词）。 */
-  const petSystemPrompt = (petId: string, cfg: Record<string, Record<string, unknown>>): string => {
-    const found = findPetInstance(cfg, petId);
-    const conf = found ? found.conf : (cfg.main ?? {});
-    const prompt = typeof conf.whisperPrompt === 'string' ? conf.whisperPrompt : '';
-    const name = found ? String(found.pet.name || found.pet.id || petId) : petId;
-    const nameLine = '你的名字是“' + name + '”。';
-    const base = prompt ? prompt + '\n' + nameLine : nameLine;
-    const time = timeContextOf(new Date());
-    return time ? base + '\n' + time : base;
-  };
+  // 人设 system 与「时间背景」的拼装收在 ./prompt：system 必须跨请求逐字相同（prompt cache 的
+  // 前缀），时间这类每分钟都变的内容只能拼到最后一条 user 消息上——见该文件的头注释。
 
   /** 对话记忆轮数（1 轮 = 1 问 1 答）：所属条目/主条目的 chatMemoryRounds（合并器已填默认非负数字） */
   const memoryRounds = (petId: string, cfg: Record<string, Record<string, unknown>>): number => {
@@ -390,8 +377,9 @@ export function apply(ctx: any): void {
     const system = petSystemPrompt(petId, cfg);
     // 配图：全局开关关闭 / 池为空 / 池内图片全缺失 → 纯文本（不报错，退化为原行为）
     const meme = conf.whisperImageEnabled === true ? pickMeme(readMemePool(conf.memes, memeDirsFor(entry))) : undefined;
-    // 模型：条目配置的 whisperModel 优先（留空 = 不指定）；生成侧失败会回落到当前对话的模型重试一次
-    const result = await generateWhisper(ctx, system, meme, configuredModel(conf, 'whisperModel'));
+    // 模型：条目配置的 whisperModel 优先（留空 = 不指定）；生成侧失败会回落到本地服务配置的模型重试一次
+    // now：时间背景由 whisper 侧拼到最后一条 user 消息（不进 system——那是缓存前缀，见 ./prompt）
+    const result = await generateWhisper(ctx, system, meme, configuredModel(conf, 'whisperModel'), new Date());
     if (!result.ok) {
       // 失败**不写 S**（与改造前一致：静默跳过 + console.warn，不伪造文案、不弹错误气泡）
       console.warn(
@@ -434,8 +422,17 @@ export function apply(ctx: any): void {
       // rounds = 0（用户关掉历史）→ 空历史；否则截尾部 rounds 轮（1 轮 = 1 问 1 答）。
       // 不能写 slice(-rounds * 2)：-0 在 JS 里 === 0，slice(-0) 返回整个数组而不是空。
       const list = sliceMemoryRounds(entry.messages, rounds);
-      // 模型：条目配置的 chatModel 优先（留空 = 不指定）；生成侧失败会回落到当前对话的模型重试一次
-      const generated = await generateChat(ctx, system, list, text, pool, configuredModel(conf, 'chatModel'));
+      // 模型：条目配置的 chatModel 优先（留空 = 不指定）；生成侧失败会回落到本地服务配置的模型重试一次
+      // 时间背景只进**这一次请求**的 user 消息（不进 system、也不写进记忆）：system + 历史构成
+      // 的前缀因此逐字稳定，整段记忆都能命中 prompt cache——见 ./prompt 的头注释。
+      const generated = await generateChat(
+        ctx,
+        system,
+        list,
+        withTimeContext(text, new Date()),
+        pool,
+        configuredModel(conf, 'chatModel'),
+      );
       if (!generated.ok) return generated;
       const now = Date.now();
       entry.messages.push({ role: 'user', content: text, ts: now });

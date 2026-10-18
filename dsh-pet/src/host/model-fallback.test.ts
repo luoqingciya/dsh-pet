@@ -171,3 +171,46 @@ describe('调用形状 —— 调用身份与真实失败原因', () => {
     assert.equal(r.ok === false && r.message, '模型未返回文本');
   });
 });
+
+/**
+ * 请求形状 —— **时间背景不得进 system**（prompt cache 前缀）。
+ *
+ * 现场：填好 Key 之后碎碎念几乎拿不到上下文缓存。根因是我们自己：时间背景精确到分钟，
+ * 从前拼在 system 末尾，而 prompt cache 靠"前缀逐字相同"命中——每次请求都在同一位置断掉。
+ * 碎碎念只能命中第一个 64 token 块；对话更惨，记忆历史排在 system 之后，整段历史都要重算。
+ *
+ * 修法：system 只留人设（逐字稳定），时间拼到最后一条 user 消息上。这里从**请求参数**这一层
+ * 钉住分工，避免以后又有人图省事把时间塞回 system。
+ */
+describe('请求形状 —— 时间背景只进 user 消息（缓存前缀必须稳定）', () => {
+  /** 取出 options 里的 system 与「最后一条 user 消息的正文」 */
+  const shapeOf = (o: Record<string, unknown>): { system: string; user: string; all: string[] } => {
+    const messages = (o.messages ?? []) as Array<{ content?: Array<{ text?: string }> }>;
+    const texts = messages.map((m) => String(m.content?.[0]?.text ?? ''));
+    return { system: String(o.system ?? ''), user: texts[texts.length - 1] ?? '', all: texts };
+  };
+
+  test('碎碎念：system 原样透传，时间在 user 指令里', async () => {
+    const { ctx, options } = fakeCtx(CURRENT, { current: 'ok' });
+    const system = '你是一只桌面小女仆。\n你的名字是“小女仆”。';
+    await generateWhisper(ctx, system, undefined, undefined, new Date(2026, 9, 18, 14, 31));
+    const s = shapeOf(options[0]!);
+    assert.equal(s.system, system, 'system 必须逐字原样（它就是缓存前缀）');
+    assert.ok(!s.system.includes('【当下】'), 'system 不得含时间行');
+    assert.ok(s.user.startsWith('【当下】'), '时间背景必须在 user 消息里（且在指令之前）');
+    assert.ok(s.user.includes('随便说一句日常碎碎念'), '原指令不能被时间行顶掉');
+  });
+
+  test('对话：历史原样，只有最后一条 user 带时间', async () => {
+    const { ctx, options } = fakeCtx(CURRENT, { current: 'ok' });
+    const history = [
+      { role: 'user' as const, content: '你好', ts: 1 },
+      { role: 'assistant' as const, content: '主人好呀', ts: 2 },
+    ];
+    await generateChat(ctx, '人设', history, '【当下】…\n今天吃什么', [], undefined);
+    const s = shapeOf(options[0]!);
+    assert.equal(s.system, '人设', 'system 不得被追加任何内容');
+    assert.deepEqual(s.all.slice(0, 2), ['你好', '主人好呀'], '历史必须原样（它们是可缓存的前缀）');
+    assert.ok(s.user.endsWith('今天吃什么'));
+  });
+});
