@@ -13,7 +13,7 @@
  *   npm run app:installer
  *   DSH_PET_ELECTRON_DIR=/path/to/electron/dist npm run app:installer
  *
- * 前置：`npm run build` 已跑过（需要 lib/app-entry.cjs 与其余产物）。
+ * 前置：`npm run build` 已跑过（需要 lib/app-main.cjs 与其余产物）。
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
@@ -43,9 +43,8 @@ if (process.platform !== 'win32') {
   fail('安装版目前只做 Windows（NSIS）。其他平台请用 npm run app:package 产出免安装 zip。');
 }
 
-const entry = join(ROOT, 'lib', 'app-entry.cjs');
-if (!existsSync(entry)) fail('缺少 lib/app-entry.cjs，请先运行 npm run build');
-if (!existsSync(join(ROOT, 'lib', 'app-main.cjs'))) fail('缺少 lib/app-main.cjs，请先运行 npm run build');
+const entry = join(ROOT, 'lib', 'app-main.cjs');
+if (!existsSync(entry)) fail('缺少 lib/app-main.cjs，请先运行 npm run build');
 
 const electron = electronDir();
 if (!electron) {
