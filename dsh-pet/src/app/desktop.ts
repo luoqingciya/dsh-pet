@@ -38,6 +38,12 @@ interface WindowLayer {
     reload(pets: Array<{ id: string; size: number }>): number;
     dpi: { forcedScale: number; primaryScale: number; uiScale: number };
   };
+  /** 托盘菜单（自绘窗口，见 windows.js 的说明）：原生菜单不跟随 DPI 补偿，150% 屏上偏小 */
+  createTrayMenu(options: { onAction?: (action: string) => void }): {
+    show(items: Array<{ label: string; action?: string }>): void;
+    hide(): void;
+    destroy(): void;
+  };
 }
 
 /** DPI 线性化的结果（设置窗要用 uiScale 补偿尺寸，否则 150% 屏上会缩成 2/3） */
@@ -124,4 +130,18 @@ export function createDesktopService(options: {
       desktop?.stop();
     },
   };
+}
+
+/**
+ * 建一个**自绘**托盘菜单（Windows/Linux 在 DPI 线性化下原生菜单偏小，见 windows.js）。
+ *
+ * @param options.packageRoot 包根（找 runtime/electron-helper/windows.js）
+ * @param options.onAction 菜单项被点击：action 由调用方解释（打开设置 / 重载 / 检查更新 / …）
+ */
+export function createTrayMenuService(options: { packageRoot: string; onAction: (action: string) => void }): {
+  show(items: Array<{ label: string; action?: string }>): void;
+  hide(): void;
+  destroy(): void;
+} {
+  return windowLayer(options.packageRoot).createTrayMenu({ onAction: options.onAction });
 }

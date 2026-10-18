@@ -249,6 +249,16 @@ export function LocalPanel(): React.ReactElement {
     }
   };
 
+  /** 退出应用（托盘菜单之外的第二条路径；先确认，避免误点） */
+  const quit = async (): Promise<void> => {
+    if (!window.confirm('退出 dsh-pet？宠物与本地服务都会关闭。')) return;
+    try {
+      await request('/app/api/quit', { method: 'POST' });
+    } catch (error) {
+      setMessage({ kind: 'err', text: `退出失败：${error instanceof Error ? error.message : String(error)}` });
+    }
+  };
+
   const openDir = async (): Promise<void> => {
     try {
       await request('/app/api/open-dir', { method: 'POST' });
@@ -496,6 +506,9 @@ export function LocalPanel(): React.ReactElement {
         </button>
         <button className="btn" type="button" onClick={() => void openDir()}>
           打开数据目录
+        </button>
+        <button className="btn" type="button" onClick={() => void quit()}>
+          退出 dsh-pet
         </button>
         {message.text ? <span className={`status ${message.kind}`}>{message.text}</span> : null}
       </div>

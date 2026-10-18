@@ -53,6 +53,9 @@ win:
   artifactName: dsh-pet-${version}-win-${arch}-setup.${ext}
 
 nsis:
+  # 升级时保住安装目录里 data/ 的用户数据（默认流程会把整个 $INSTDIR 删掉）。
+  # 细节见 build/installer.nsh 的注释。
+  include: build/installer.nsh
   oneClick: false
   perMachine: false
   allowElevation: false

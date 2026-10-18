@@ -70,4 +70,21 @@ contextBridge.exposeInMainWorld('petBridge', {
   onDisplays(cb) {
     ipcRenderer.on('pet:displays', (e, geo) => cb(geo));
   },
+  // ---- 托盘菜单（自绘窗口，见 tray-menu.js）----
+  // 为什么托盘菜单要自绘：Windows 的原生托盘菜单不跟随应用的 DPI 补偿，150% 屏上只有 2/3 大。
+  onTrayMenu(cb) {
+    ipcRenderer.on('pet:tray-menu', (e, payload) => cb(payload));
+  },
+  /** 渲染完把菜单真实尺寸报回去（主进程据此收缩窗口） */
+  trayMenuSize(size) {
+    ipcRenderer.send('pet:tray-size', size);
+  },
+  /** 点了哪一项（action 由主进程解释） */
+  trayAction(action) {
+    ipcRenderer.send('pet:tray-action', { action });
+  },
+  /** 菜单被点外 / Esc 关掉：请主进程隐藏窗口 */
+  trayClose() {
+    ipcRenderer.send('pet:tray-close');
+  },
 });

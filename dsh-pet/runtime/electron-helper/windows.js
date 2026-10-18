@@ -898,8 +898,133 @@ function runStandalone() {
   });
 }
 
+/**
+ * 托盘菜单（自绘窗口）。
+ *
+ * 为什么不用 `Tray.setContextMenu`：Windows 上那是**原生控件**，字号由系统/进程 DPI 决定；
+ * 而本应用为了让宠物像素级对齐强制了 `force-device-scale-factor=1` —— 原生菜单不跟这套补偿，
+ * 150% 屏上只有 2/3 大，而且 `MenuItem` 没有任何字号/内边距可调（实测主屏 scaleFactor=1.5）。
+ *
+ * 所以改成"无边框透明小窗 + 同一套 DOM 菜单"：菜单渲染复用 `S.mountContextMenu`（与宠物右键
+ * 菜单完全同一个组件、同一套样式），窗口尺寸与 zoomFactor 按 `uiScale` 补偿 —— 与设置窗同一套
+ * 做法。窗口只在弹出时存在（第一次右键才建），失焦即隐藏。
+ *
+ * @param {{onAction?: (action: string) => void}} [options] 菜单项被点击时的回调（action 由调用方解释）
+ * @returns {{show: (items: Array<object>) => void, hide: () => void, destroy: () => void}}
+ */
+/** 托盘菜单的 IPC 只能注册一次（模块级，跨 createTrayMenu 调用共享） */
+let trayMenuIpcInstalled = false;
+
+function createTrayMenu(options = {}) {
+  const onAction = typeof options.onAction === 'function' ? options.onAction : () => {};
+  const scaleOf = () => resolveUiScale({ primaryScale: PRIMARY_SCALE, forcedScale: FORCED_SCALE }) || 1;
+
+  let win = null;
+  /** 弹出时的光标位置：收到真实尺寸后按它重新摆（估算尺寸先占位） */
+  let anchor = null;
+  /** 上一次的菜单尺寸（CSS 像素）；下次弹出先用它，避免闪一下再收缩 */
+  let size = { width: 220, height: 240 };
+
+  const toPhysical = (v) => Math.round(v * scaleOf());
+
+  /** 按锚点摆窗口：菜单左下角贴光标（托盘在屏幕底部），越界夹回当前屏工作区 */
+  function place() {
+    if (!win || win.isDestroyed() || !anchor) return;
+    const width = toPhysical(size.width);
+    const height = toPhysical(size.height);
+    const area = screen.getDisplayNearestPoint(anchor).workArea;
+    const x = Math.min(Math.max(anchor.x - width + toPhysical(12), area.x), area.x + area.width - width);
+    const y = Math.min(Math.max(anchor.y - height, area.y), area.y + area.height - height);
+    win.setBounds({ x: Math.round(x), y: Math.round(y), width, height });
+  }
+
+  function ensureWindow() {
+    if (win && !win.isDestroyed()) return win;
+    win = new BrowserWindow({
+      width: toPhysical(size.width),
+      height: toPhysical(size.height),
+      frame: false,
+      transparent: true,
+      resizable: false,
+      movable: false,
+      minimizable: false,
+      maximizable: false,
+      fullscreenable: false,
+      skipTaskbar: true,
+      alwaysOnTop: true,
+      show: false,
+      hasShadow: false,
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        // 与设置窗同样的补偿：窗口尺寸与页面缩放同时乘 uiScale，菜单在 150% 屏上才是正常大小
+        zoomFactor: scaleOf(),
+      },
+    });
+    win.setMenuBarVisibility(false);
+    win.loadFile(path.join(__dirname, 'tray-menu.html'));
+    // 失焦 = 用户点了别处：与原生菜单一致，直接收起
+    win.on('blur', () => hide());
+    win.on('closed', () => {
+      win = null;
+    });
+    return win;
+  }
+
+  function hide() {
+    if (win && !win.isDestroyed() && win.isVisible()) win.hide();
+  }
+
+  function show(items) {
+    const target = ensureWindow();
+    anchor = screen.getCursorScreenPoint();
+    place();
+    const push = () => {
+      if (!win || win.isDestroyed()) return;
+      win.webContents.send('pet:tray-menu', { items: Array.isArray(items) ? items : [] });
+    };
+    if (target.webContents.isLoading()) target.webContents.once('did-finish-load', push);
+    else push();
+    target.show();
+    target.focus();
+  }
+
+  function destroy() {
+    if (win && !win.isDestroyed()) win.destroy();
+    win = null;
+  }
+
+  // IPC 只注册一次（createTrayMenu 可能被调用多次：托盘重建）
+  if (!trayMenuIpcInstalled) {
+    trayMenuIpcInstalled = true;
+    const ownerOf = (event) => (win && !win.isDestroyed() && event.sender === win.webContents ? win : null);
+    ipcMain.on('pet:tray-size', (event, payload) => {
+      if (!ownerOf(event)) return;
+      const width = Number(payload && payload.width);
+      const height = Number(payload && payload.height);
+      if (!(width > 0 && height > 0)) return;
+      // 兜底夹取：菜单项异常多时不至于铺满屏幕
+      size = { width: Math.min(Math.max(width, 120), 560), height: Math.min(Math.max(height, 60), 760) };
+      place();
+    });
+    ipcMain.on('pet:tray-close', (event) => {
+      if (ownerOf(event)) hide();
+    });
+    ipcMain.on('pet:tray-action', (event, payload) => {
+      if (!ownerOf(event)) return;
+      hide();
+      const action = payload && typeof payload === 'object' ? String(payload.action || '') : '';
+      if (action) onAction(action);
+    });
+  }
+
+  return { show, hide, destroy };
+}
+
 module.exports = {
   prepareRuntime,
+  createTrayMenu,
   createDesktop,
   petScale,
   reportPrimaryScale,

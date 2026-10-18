@@ -44,6 +44,8 @@ export interface WebUiDeps {
   openPath(dir: string): Promise<void>;
   /** 数据目录 */
   dataDir(): string;
+  /** 退出应用（设置页「退出」按钮：托盘菜单之外的第二条退出路径） */
+  quit(): void;
 }
 
 /** 读请求体（限 1MiB，避免被本地脚本灌爆内存） */
@@ -322,6 +324,16 @@ export function createWebUi(deps: WebUiDeps) {
           message: error instanceof Error ? error.message : String(error),
         });
       }
+      return true;
+    }
+
+    /**
+     * 退出应用。设置页留一个显眼的出口：自绘托盘菜单万一出问题，用户不至于只能去任务管理器。
+     * 与 `/shutdown` 一样先回话再退（延迟 100ms 让响应 flush 出去）。
+     */
+    if (pathname === '/app/api/quit' && method === 'POST') {
+      sendJson(res, 200, { ok: true, quitting: true });
+      setTimeout(() => deps.quit(), 100);
       return true;
     }
 

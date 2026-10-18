@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:"
+    />
+    <title>dsh-pet 托盘菜单</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+        user-select: none;
+      }
+      #root {
+        position: relative;
+        width: 100%;
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <!-- 与宠物右键菜单共用同一份组件（shared-core.js = src/shared 的构建产物） -->
+    <script src="./shared-core.js"></script>
+    <script src="./tray-menu.js"></script>
+  </body>
+</html>

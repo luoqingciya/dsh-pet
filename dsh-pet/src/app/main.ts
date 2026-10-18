@@ -28,7 +28,7 @@ import {
 import { dirname, join } from 'node:path';
 
 import { apply } from '../host/index';
-import { createDesktopService, prepareDesktopRuntime, reportPrimaryScale } from './desktop';
+import { createDesktopService, createTrayMenuService, prepareDesktopRuntime, reportPrimaryScale } from './desktop';
 import { listenAppServer } from './server';
 import type { RegisteredRoute } from './server';
 import { createAppContext } from './context';
@@ -224,6 +224,8 @@ if (!GOT_LOCK) {
 
 let settingsWindow: BrowserWindow | undefined;
 let tray: Tray | undefined;
+/** 自绘托盘菜单（线性化生效时才有；见 createTray） */
+let trayMenu: ReturnType<typeof createTrayMenuService> | undefined;
 let server: { port: number; close(): Promise<void> } | undefined;
 let context: ReturnType<typeof createAppContext> | undefined;
 let stopNotify: (() => void) | undefined;
@@ -379,7 +381,45 @@ function startUpdateCheck(): () => void {
   };
 }
 
-/** 托盘：设置 / 重载配置 / 打开数据目录 / 退出 */
+/** 托盘菜单的动作（自绘菜单与原生菜单共用同一份实现） */
+function trayAction(action: string): void {
+  switch (action) {
+    case 'settings':
+      openSettings();
+      return;
+    case 'reload':
+      // 与右键菜单「重载配置」同一条路由：重建桌面窗口，按最新配置重建全部宠物窗口
+      void fetch(`http://127.0.0.1:${port}/dsh-pet-7340/reload`, { method: 'POST' }).catch((error: unknown) =>
+        log.warn(`重载配置失败：${error instanceof Error ? error.message : String(error)}`),
+      );
+      return;
+    case 'check-update':
+      // 手动触发：不走 15 秒延迟，也不受设置里的自动检查开关约束
+      if (checkUpdateNow) checkUpdateNow(true);
+      else log.info('更新检查尚未就绪（应用还在启动），稍后再试');
+      return;
+    case 'open-data':
+      void shell.openPath(petDataDir());
+      return;
+    case 'quit':
+      quitting = true;
+      app.quit();
+      return;
+    default:
+      log.warn(`未知的托盘动作：${action}`);
+  }
+}
+
+/** 托盘菜单项（自绘与原生两条路共用；顺序即显示顺序） */
+const TRAY_ITEMS: Array<{ label: string; action: string }> = [
+  { label: '打开设置', action: 'settings' },
+  { label: '重载配置', action: 'reload' },
+  { label: '检查更新', action: 'check-update' },
+  { label: '打开数据目录', action: 'open-data' },
+  { label: '退出', action: 'quit' },
+];
+
+/** 托盘：设置 / 重载配置 / 检查更新 / 打开数据目录 / 退出 */
 function createTray(): void {
   const iconPath = join(PACKAGE_ROOT, 'assets', 'logo.png');
   const image = existsSync(iconPath) ? nativeImage.createFromPath(iconPath) : nativeImage.createEmpty();
@@ -388,43 +428,39 @@ function createTray(): void {
   const trayPx = Math.round(20 * DPI.uiScale);
   tray = new Tray(image.isEmpty() ? nativeImage.createEmpty() : image.resize({ width: trayPx, height: trayPx }));
   tray.setToolTip('dsh-pet');
-  const rebuild = (): void => {
-    tray?.setContextMenu(
-      Menu.buildFromTemplate([
-        { label: '打开设置', click: () => openSettings() },
-        {
-          label: '重载配置',
-          click: () => {
-            // 与右键菜单「重载配置」同一条路由：重建桌面窗口，按最新配置重建全部宠物窗口
-            void fetch(`http://127.0.0.1:${port}/dsh-pet-7340/reload`, { method: 'POST' }).catch((error: unknown) =>
-              log.warn(`重载配置失败：${error instanceof Error ? error.message : String(error)}`),
-            );
-          },
-        },
-        {
-          label: '检查更新',
-          click: () => {
-            // 手动触发：不走 15 秒延迟，也不受设置里的自动检查开关约束
-            if (checkUpdateNow) checkUpdateNow(true);
-            else log.info('更新检查尚未就绪（应用还在启动），稍后再试');
-          },
-        },
-        { type: 'separator' },
-        { label: '打开数据目录', click: () => void shell.openPath(petDataDir()) },
-        { type: 'separator' },
-        {
-          label: '退出',
-          click: () => {
-            quitting = true;
-            app.quit();
-          },
-        },
-      ]),
-    );
-  };
-  rebuild();
+
+  /**
+   * 菜单走**自绘**还是原生？
+   *
+   * DPI 线性化生效时（Windows/Linux，forcedScale > 0）用自绘窗口：原生托盘菜单是系统控件，
+   * 字号不跟应用的缩放补偿走，150% 屏上只有 2/3 大且无法调（实测 primaryScale=1.5）。
+   * macOS 不启用线性化（DIP 就是「点」），原生菜单大小本来就对，继续用原生——菜单栏点击弹
+   * 原生菜单才是那个平台的习惯。
+   */
+  if (DPI.forcedScale > 0) {
+    trayMenu = createTrayMenuService({ packageRoot: PACKAGE_ROOT, onAction: trayAction });
+    tray.on('right-click', () => trayMenu?.show(TRAY_ITEMS));
+  } else {
+    const rebuild = (): void => {
+      tray?.setContextMenu(
+        Menu.buildFromTemplate(TRAY_ITEMS.map((item) => ({ label: item.label, click: () => trayAction(item.action) }))),
+      );
+    };
+    rebuild();
+  }
+
   // 左键点托盘 = 打开设置（Windows / Linux 习惯；macOS 走菜单栏点击弹菜单）
   tray.on('click', () => openSettings());
+
+  // 排障 / 运行时测试钩子：没有可点击的托盘图标时（playwright / 无头验证）也能弹一次菜单。
+  // 只在主进程里可见，渲染端碰不到。
+  (globalThis as Record<string, unknown>).__dshTray = {
+    show: () => {
+      if (trayMenu) trayMenu.show(TRAY_ITEMS);
+      else log.warn('当前是原生托盘菜单，没有自绘菜单可弹');
+    },
+    items: TRAY_ITEMS,
+  };
 }
 
 /**
@@ -483,6 +519,8 @@ async function bootstrap(): Promise<void> {
       await shell.openPath(dir);
     },
     dataDir: () => petDataDir(),
+    // 设置页「退出」：走 before-quit 的收尾（释放宿主 effect → 关服务 → exit）
+    quit: () => app.quit(),
   });
 
   server = await listenAppServer({
@@ -566,6 +604,7 @@ if (IS_DPI_PROBE) {
     void (async () => {
       stopNotify?.();
       stopUpdateCheck?.();
+      trayMenu?.destroy();
       // 先释放宿主的 effect（销毁桌面窗口、清定时器），再关服务
       await context?.dispose().catch(() => {});
       await server?.close().catch(() => {});

@@ -101,7 +101,8 @@ declare module 'electron' {
     constructor(image: NativeImage);
     setToolTip(text: string): void;
     setContextMenu(menu: unknown): void;
-    on(event: 'click', listener: () => void): void;
+    /** 'click' = 左键；'right-click' = 右键（Windows/Linux 下没设原生菜单时用来弹自绘菜单） */
+    on(event: 'click' | 'right-click', listener: () => void): void;
   }
 
   /**
