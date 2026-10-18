@@ -2,7 +2,7 @@
  * 本地应用的宿主上下文：把宿主半边（`src/host/index.ts` 的 `apply`）跑在**真实服务**上。
  *
  * `apply` 只要求一个 Cordis 风格的 `ctx`，它自己负责路由表、配置合并、素材归属、
- * 桌面 Helper 的拉起与守护。本文件提供的就是那几项服务：
+ * 桌面窗口的启停。本文件提供的就是那几项服务：
  *
  *   - `credentials.resolve`  → 本地 `secrets.json`（设置页填写，权限 0600）
  *   - `agentDefaultModel`    → 本地 `app-config.json` 的服务商 + 模型
@@ -11,7 +11,8 @@
  *                              `turn/start` / `turn/end` 会话事件投进来，于是宿主的
  *                              **工作状态联动**与**系统通知帧**两条链路照常工作，
  *                              不需要为本地模式另写一套状态机。
- *   - `get(name)`            → 恒 undefined（账号余额服务在本应用里不存在）
+ *   - `petDesktop`           → 桌面窗口服务（`desktop.ts`）：宿主决定"哪些宠物该显示在桌面"，
+ *                              应用决定"怎么把窗口开出来"。纯 Node 环境不传 = 没有桌面宠物。
  *
  * 本文件一行业务逻辑都没有：加一个宠物端点、改一处配置合并，仍然只改 `src/host`。
  */
@@ -19,6 +20,7 @@
 import type { AppConfig } from './local-config';
 import { readSecrets, type SecretMap } from './local-config';
 import { createLlmService, type LlmService } from './llm-openai';
+import type { PetDesktop } from '../host/desktop-api';
 import type { AppLogger, RegisteredRoute } from './server';
 
 /** 路由与日志类型由 `./server` 定义，这里原样转出，调用方只 import 一处 */
@@ -37,6 +39,8 @@ export interface AppContextOptions {
   config: () => AppConfig;
   /** 现读密钥（同上） */
   secrets?: () => SecretMap;
+  /** 桌面窗口服务（Electron 环境才有；不传 = 没有桌面宠物，其余端点照常） */
+  petDesktop?: PetDesktop;
 }
 
 export interface AppContext {
@@ -47,7 +51,7 @@ export interface AppContext {
   failures: string[];
   /** 向插件投递一个宿主事件（本地合成：turn/start、turn/end…） */
   emit(name: string, ...args: unknown[]): void;
-  /** 释放全部 effect（停桌面 Helper、清定时器）与事件监听 */
+  /** 释放全部 effect（停桌面窗口、清定时器）与事件监听 */
   dispose(): Promise<void>;
 }
 
@@ -145,6 +149,9 @@ export function createAppContext(options: AppContextOptions): AppContext {
      * 空串 = 跟随主服务商。宿主半边会优先读这个能力（DSH 内不提供，行为不变）。
      */
     petBalanceProvider: (): string => configOf().balanceProvider,
+
+    // 桌面窗口：只在有 Electron 的环境注入（见 desktop.ts）
+    ...(options.petDesktop ? { petDesktop: options.petDesktop } : {}),
   };
 
   return {

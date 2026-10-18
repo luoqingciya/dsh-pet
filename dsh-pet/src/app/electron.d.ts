@@ -2,10 +2,11 @@
  * `electron` 的最小类型声明（只覆盖本地应用用到的 API）。
  *
  * 为什么不装 `electron` 这个 devDependency：它的 postinstall 会下载 ~100MB 的运行时，
- * 而本项目**本来就不需要**再下一份（桌面 Helper 用的是 `$DSH_HOME/electron` 里那份，
- * 本地应用用启动器解析出的同一份）。为几十行类型引入一次大下载不划算。
+ * 而本项目**本来就不需要**再下一份（应用自带运行时；开发态由启动器准备一份到
+ * `$DSH_HOME/electron`）。为几十行类型引入一次大下载不划算。
  *
- * 代价：这份声明必须与真实 API 保持同步。它只被 `src/app/main.ts` 消费，
+ * 代价：这份声明必须与真实 API 保持同步。它只被 `src/app/main.ts` 与
+ * `runtime/electron-helper/windows.js` 的调用方（src/app/desktop.ts）间接消费，
  * 用到的成员一览即全部——改主进程时如果这里缺字段，typecheck 会直接报出来（这正是目的）。
  */
 declare module 'electron' {
@@ -45,6 +46,8 @@ declare module 'electron' {
       nodeIntegration?: boolean;
       sandbox?: boolean;
       preload?: string;
+      /** 页面缩放（DPI 线性化时用来把设置页还原到 DIP 观感） */
+      zoomFactor?: number;
     };
   }
 

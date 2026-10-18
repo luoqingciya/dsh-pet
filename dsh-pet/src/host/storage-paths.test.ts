@@ -1,9 +1,9 @@
 /**
  * 存储位置清单单元测试 —— 钉住设置页「卸载与存储」展示的每一条路径：
- * 必须与真实写入方（index.ts 的 userRoot、helper-process.ts 的 Electron 落地目录、
- * main.js 的 app.setName、@electron/get 的 env-paths cacheRoot）逐平台一致。
+ * 必须与真实写入方（index.ts 的 userRoot、electron-runtime.ts 的 Electron 落地目录、
+ * src/app/main.ts 的 app.setName、@electron/get 的 env-paths cacheRoot）逐平台一致。
  *
- * 其中 DESKTOP_APP_NAME 直接读 runtime/electron-helper/main.js 校验——两边改名不同步时
+ * 其中 DESKTOP_APP_NAME 直接读 src/app/main.ts 校验——两边改名不同步时
  * 设置页会显示一个永远不存在的目录，这里必须红。
  *
  * 跑法：node --experimental-strip-types --test src/host/storage-paths.test.ts
@@ -131,10 +131,10 @@ describe('profileNameFrom —— 卸载命令里的 profile 名', () => {
 });
 
 describe('DESKTOP_APP_NAME —— 与桌面端实际应用名防漂移', () => {
-  test('与 runtime/electron-helper/main.js 的 app.setName 一致', () => {
-    const src = readFileSync(new URL('../../runtime/electron-helper/main.js', import.meta.url), 'utf8');
+  test('与 src/app/main.ts 的 app.setName 一致', () => {
+    const src = readFileSync(new URL('../app/main.ts', import.meta.url), 'utf8');
     const m = /app\.setName\(\s*['"]([^'"]+)['"]\s*\)/.exec(src);
-    assert.ok(m, 'main.js 里没有找到 app.setName');
+    assert.ok(m, 'main.ts 里没有找到 app.setName');
     assert.equal(m[1], DESKTOP_APP_NAME);
   });
 });

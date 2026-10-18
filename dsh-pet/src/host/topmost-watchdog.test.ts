@@ -87,7 +87,7 @@ describe('shouldReassertTopmost —— 到点才重钉，每拍都问一次', ()
 });
 
 describe('源码守卫 —— 置顶看门狗必须在 main.js 里按这套规则接线', () => {
-  const main = readSource(helper + 'main.js');
+  const main = readSource(helper + 'windows.js');
   /** 看门狗定时器体（锚在 topmostTimer 的赋值上，避免匹配到更早的其它 setInterval） */
   const watchdogBody = (): string => {
     const m = /topmostTimer = setInterval\(\(\) => \{([\s\S]*?)\}, TOPMOST_WATCHDOG_TICK_MS\);/.exec(main);

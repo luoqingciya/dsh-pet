@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * start-desktop.mjs —— 本地开发/手动启动桌面 Helper（不经 DSH 宿主拉起）。
+ * start-desktop.mjs —— 只起桌面窗口层（不经应用壳），对着任意一个已在跑的服务调窗口。
  *
  * 用法：
  *   node scripts/start-desktop.mjs [configUrl]
@@ -18,7 +18,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const helperMain = resolve(here, '..', 'runtime', 'electron-helper', 'main.js');
+const helperMain = resolve(here, '..', 'runtime', 'electron-helper', 'windows.js');
 const defaultConfigUrl =
   process.env.DSH_PET_CONFIG_URL || process.argv[2] || 'http://127.0.0.1:7340/dsh-pet-7340/config';
 
@@ -53,9 +53,6 @@ const env = {
   ...process.env,
   DSH_PET_CONFIG_URL: defaultConfigUrl,
   DSH_PET_SCALE: process.env.DSH_PET_SCALE || '1',
-  // 开发流也跟随：本脚本退出（含被强杀）后桌宠自己走，不留一个没人管的 helper
-  // （helper 侧 host-liveness.js 每 2s kill(pid, 0) 一次，ESRCH 即自行退出；见 issue #56）
-  DSH_PET_HOST_PID: String(process.pid),
 };
 // 删掉会劫持 Electron 启动模式的变量（issue #63）：终端/宿主里若带着 ELECTRON_RUN_AS_NODE，
 // Electron 会以纯 Node 模式启动，main.js 顶部 require('electron') 直接 MODULE_NOT_FOUND。

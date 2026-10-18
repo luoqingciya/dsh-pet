@@ -47,8 +47,8 @@ const emptyLeaf = (): StateLeaf => ({ counter: 0, data: null });
 
 /** 轮询统一状态存储（一个插件实例一个；进程内内存态，重启即空） */
 export class PollStateStore {
-  // 用 declare + 构造器赋值（不用类字段初始化器）：类字段会降级出 @oxc-project/runtime 外部
-  // helper，而它是未声明的依赖，会被 prepack 门禁拦下（同 src/host/helper-process.ts 的约定）。
+  // 用 declare + 构造器赋值（不用类字段初始化器）：类字段会降级出 @oxc-project/runtime，
+  // 那是未声明的外部依赖，会被 prepack 门禁拦下（本仓库对全部宿主类统一这条约定）。
   /** 严格递增的计数器种子（保证同一毫秒内连写两次也拿到不同的 counter） */
   declare private last: number;
   declare private readonly sections: Record<SectionName, StateLeaf>;

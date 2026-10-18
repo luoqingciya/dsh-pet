@@ -13,7 +13,7 @@
  * 用法：node scripts/prepare.js（npm run build；prepack 也会自动跑）
  */
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -37,12 +37,6 @@ function run(script) {
 rmSync(join(ROOT, 'lib'), { recursive: true, force: true });
 run('bundle');
 run('build:desktop-core');
-
-// 1.5 角色分发入口：便携版与安装版共用同一个 exe 跑「应用主进程」和「桌面 Helper」，
-//     靠 `lib/app-entry.cjs` 按 DSH_PET_ROLE 分发（见该文件头）。它是纯 CJS 源码，
-//     不经过打包器（静态 require 会被打进同一份产物），这里原样拷进 lib。
-copyFileSync(join(ROOT, 'src', 'app', 'entry.cjs'), join(ROOT, 'lib', 'app-entry.cjs'));
-console.log('[prepare] ✓ lib/app-entry.cjs（角色分发入口）');
 
 // 2. files 收敛（幂等，无备份）
 const pkg = JSON.parse(readFileSync(PKG, 'utf8'));

@@ -217,7 +217,7 @@ describe('菜单/聊天框只占控件矩形，不吞掉其它应用点击', () 
 });
 
 describe('源码守卫 —— helper 的两个兜底必须在位', () => {
-  const main = readSource(helper + 'main.js');
+  const main = readSource(helper + 'windows.js');
 
   test('#55-1 兜底显示：ready-to-show 之外还要有"加载完成后仍未显示就 show"', () => {
     assert.ok(/once\('ready-to-show', \(\) => win\.showInactive\(\)\)/.test(main), '显示不得抢其它应用焦点');

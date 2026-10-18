@@ -14,8 +14,8 @@
  *      各自的短路；强制值与渲染端缩放的两步换算；
  *   ② 端到端不变量：同一份配置下 macOS 的宠物尺寸必须等于配置值（修复前是它的 2 倍），而 Windows
  *      150% 屏仍按 1.5 补偿（主屏观感与修复前逐像素相同）；
- *   ③ 源码守卫：平台例外只住在 dpi-linearization.js 里、main.js 只接线不重新实现，以及新模块进了
- *      发布必需清单（漏了 npm 包里就少一个 main.js 必需的模块，helper 启动即崩）。
+ *   ③ 源码守卫：平台例外只住在 dpi-linearization.js 里、windows.js 只接线不重新实现，以及新模块进了
+ *      发布必需清单（漏了 npm 包里就少一个 windows.js 必需的模块，helper 启动即崩）。
  *
  * 用 Node 内置 test runner（node:test），不引入任何 npm 依赖。
  */
@@ -27,7 +27,9 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const helper = '../../runtime/electron-helper/';
-const { shouldLinearize, resolveForcedScale, resolvePetScale } = require(helper + 'dpi-linearization.js');
+const { shouldLinearize, resolveForcedScale, resolvePetScale, resolveUiScale } = require(
+  helper + 'dpi-linearization.js',
+);
 
 /** 包内文件源码（守卫用；相对 src/host/ 解析） */
 const readSource = (rel: string): string => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
@@ -68,7 +70,7 @@ describe('resolveForcedScale —— 要强制成几（0 = 不启用）', () => {
     assert.equal(resolveForcedScale({}), 0);
   });
 
-  test('正数覆盖优先（排障用，会踩 main.js 注释里说的那个 bug）', () => {
+  test('正数覆盖优先（排障用，会踩 windows.js 注释里说的那个 bug）', () => {
     assert.equal(resolveForcedScale({ forceDsf: '2', primaryScale: 2 }), 2);
     assert.equal(resolveForcedScale({ forceDsf: 1.75, primaryScale: 0 }), 1.75);
   });
@@ -103,7 +105,7 @@ describe('resolvePetScale —— 渲染端 CONFIG.scale', () => {
   });
 });
 
-/** 与 main.js 接线同序地跑完整条链路：启用判定 → 强制值 → 渲染端缩放 */
+/** 与 windows.js 接线同序地跑完整条链路：启用判定 → 强制值 → 渲染端缩放 */
 function petScaleOf(platform: string, primaryScale: number, forceDsf?: string): number {
   const enabled = shouldLinearize({ platform, dpiProbe: false, forceDsf });
   const primary = enabled ? primaryScale : 0;
@@ -131,10 +133,10 @@ describe('端到端不变量 —— 用户真正看到的那件事', () => {
   });
 });
 
-describe('源码守卫 —— main.js 只接线，规则住在 dpi-linearization.js', () => {
-  const main = readSource(helper + 'main.js');
+describe('源码守卫 —— windows.js 只接线，规则住在 dpi-linearization.js', () => {
+  const main = readSource(helper + 'windows.js');
 
-  test('main.js 必须 require 新模块', () => {
+  test('windows.js 必须 require 新模块', () => {
     assert.ok(/require\('\.\/dpi-linearization\.js'\)/.test(main), '必须 require dpi-linearization.js');
   });
 
@@ -142,11 +144,11 @@ describe('源码守卫 —— main.js 只接线，规则住在 dpi-linearization
     assert.ok(/shouldLinearize\(/.test(main), '启用判定必须走 shouldLinearize');
     assert.ok(/resolveForcedScale\(/.test(main), '强制值必须走 resolveForcedScale');
     assert.ok(/resolvePetScale\(/.test(main), '渲染端缩放必须走 resolvePetScale');
-    assert.ok(!/PRIMARY_SCALE \/ FORCED_SCALE/.test(main), '补偿公式不允许再内联在 main.js 里');
+    assert.ok(!/PRIMARY_SCALE \/ FORCED_SCALE/.test(main), '补偿公式不允许再内联在 windows.js 里');
   });
 
-  test('平台例外只允许住在模块里（main.js 不得出现 darwin 分支）', () => {
-    assert.ok(!/darwin/.test(main), '平台判断写进 main.js 就绕过了本文件的单测');
+  test('平台例外只允许住在模块里（windows.js 不得出现 darwin 分支）', () => {
+    assert.ok(!/darwin/.test(main), '平台判断写进 windows.js 就绕过了本文件的单测');
   });
 
   test('强制 DSF 的 switch 必须在 shouldLinearize 判定之内（否则 macOS 又被放大）', () => {
@@ -160,14 +162,22 @@ describe('源码守卫 —— main.js 只接线，规则住在 dpi-linearization
     assert.ok(/setZoomFactor\(scale\)/.test(main), '窗口缩放必须来自 petScale()');
     assert.ok(/const scale = petScale\(\)/.test(main), 'petScale() 必须在建窗前求值一次');
   });
+
+  test('设置窗的补偿倍数也走模块（合并进程后它同样受 DSF 影响）', () => {
+    assert.ok(/resolveUiScale\(/.test(main), '设置窗补偿必须走 resolveUiScale');
+    assert.equal(resolveUiScale({ primaryScale: 1.5, forcedScale: 1 }), 1.5);
+    assert.equal(resolveUiScale({ primaryScale: 1, forcedScale: 1 }), 1);
+    assert.equal(resolveUiScale({ primaryScale: 2, forcedScale: 0 }), 1, '未启用线性化时不做任何补偿');
+    assert.equal(resolveUiScale({}), 1);
+  });
 });
 
 describe('守卫：dpi-linearization.js 必须在发布必需清单里', () => {
-  test('prepack-check.js 的 required 含它（main.js require，缺了会启动即崩）', () => {
+  test('prepack-check.js 的 required 含它（windows.js require，缺了会启动即崩）', () => {
     const src = readSource('../../scripts/prepack-check.js');
     assert.ok(
       /'runtime\/electron-helper\/dpi-linearization\.js'/.test(src),
-      '漏了它，npm 包里就少一个 main.js 必需的模块',
+      '漏了它，npm 包里就少一个 windows.js 必需的模块',
     );
   });
 });

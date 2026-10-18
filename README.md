@@ -98,14 +98,14 @@ Windows 直接双击仓库里的 `dsh-pet.cmd`；macOS / Linux 运行 `./dsh-pet
 
 模型与密钥都在这里，**改完立即生效**：
 
-| 项 | 说明 |
-| --- | --- |
-| 服务商 | DeepSeek 官方 / Ollama（本机）/ OpenAI / 阿里云百炼（通义千问）/ 自定义（OpenAI 兼容） |
-| 模型 | 如 `deepseek-flash`、`deepseek-v4-pro`、`qwen-plus`、`qwen2.5:7b`；留空则从端点的 `/models` 自动拉取 |
-| 接口地址 | OpenAI 兼容根地址（不带 `/chat/completions`） |
-| API Key | 存在本机 `secrets.json`，**用系统密钥加密**（Windows DPAPI / macOS 钥匙串 / Linux libsecret）；只写不读、不回显 |
-| 余额服务商 | 默认跟随模型服务商，也可单独指定（对话走 Ollama、余额查 DeepSeek） |
-| 通知 | 对话回复 / 余额告急 |
+| 项         | 说明                                                                                                            |
+| ---------- | --------------------------------------------------------------------------------------------------------------- |
+| 服务商     | DeepSeek 官方 / Ollama（本机）/ OpenAI / 阿里云百炼（通义千问）/ 自定义（OpenAI 兼容）                          |
+| 模型       | 如 `deepseek-flash`、`deepseek-v4-pro`、`qwen-plus`、`qwen2.5:7b`；留空则从端点的 `/models` 自动拉取            |
+| 接口地址   | OpenAI 兼容根地址（不带 `/chat/completions`）                                                                   |
+| API Key    | 存在本机 `secrets.json`，**用系统密钥加密**（Windows DPAPI / macOS 钥匙串 / Linux libsecret）；只写不读、不回显 |
+| 余额服务商 | 默认跟随模型服务商，也可单独指定（对话走 Ollama、余额查 DeepSeek）                                              |
+| 通知       | 对话回复 / 余额告急                                                                                             |
 
 点「测试连通」可直接验证端点 + 密钥 + 模型是否可用，失败会把服务端返回的原文带出来。
 
@@ -195,7 +195,7 @@ Windows 直接双击仓库里的 `dsh-pet.cmd`；macOS / Linux 运行 `./dsh-pet
 ## 架构
 
 ```
-dsh-pet.exe（Electron 主进程）
+dsh-pet.exe（单个 Electron 进程）
  ├─ 本地服务 127.0.0.1:7340
  │   ├─ /dsh-pet-7340/*   宿主半边：配置合并 / 状态仓 / 素材 / 余额 / 对话（src/host）
  │   └─ /app/*            设置页与本地服务接口（src/app/web-ui.ts）
@@ -203,12 +203,18 @@ dsh-pet.exe（Electron 主进程）
  │   ├─ credentials → secrets.json     ├─ llm → OpenAI 兼容端点
  │   └─ 事件总线（合成 turn/start、turn/end 驱动工作状态与通知）
  ├─ 托盘 / 设置窗口 / 原生通知
- └─ 桌面 Helper（子进程）→ 每只宠物一个透明置顶小窗（runtime/electron-helper）
+ └─ 桌面窗口层（src/app/desktop.ts + runtime/electron-helper/windows.js）
+     └─ 每只宠物一个透明置顶小窗；渲染端请求经 dsh-pet-bridge:// 直接调宿主路由
 ```
 
 设计上有一条硬规则：**只有一份宠物业务**。路由、配置合并、动画池、物理、菜单、气泡全部在
 `src/host` + `src/shared`；`src/app` 只补「宿主该提供的东西」（凭证 / 模型 / 通知）和一个壳。
 加一个端点或改一处动画逻辑，桌面窗口、设置页、HTTP 接口同时生效。
+
+桌宠窗口与宿主在**同一个进程**里：渲染端的每个请求走 `dsh-pet-bridge://` scheme，
+`protocol.handle` 直接调宿主路由（同进程函数调用，不经网络、不经管道）。早先的版本把窗口层
+放在一个独立的 Electron 子进程里、用 stdout 管道通信——那套间接层已整体移除，
+省掉一整套常驻的 Electron 基础进程（实测 7 进程 / 575MB → 4 进程 / 约 350MB）。
 
 ---
 
@@ -216,11 +222,11 @@ dsh-pet.exe（Electron 主进程）
 
 **打包版：数据跟着程序走。**
 
-| 形态 | 数据目录 |
-| --- | --- |
-| 安装版（Windows） | `<安装目录>\data\`（默认 `%LOCALAPPDATA%\Programs\dsh-pet\data\`） |
-| 免安装版 | `<解压目录>\data\` |
-| 源码运行 | `%APPDATA%\dsh-pet\`（macOS `~/Library/Application Support/dsh-pet`） |
+| 形态              | 数据目录                                                              |
+| ----------------- | --------------------------------------------------------------------- |
+| 安装版（Windows） | `<安装目录>\data\`（默认 `%LOCALAPPDATA%\Programs\dsh-pet\data\`）    |
+| 免安装版          | `<解压目录>\data\`                                                    |
+| 源码运行          | `%APPDATA%\dsh-pet\`（macOS `~/Library/Application Support/dsh-pet`） |
 
 ```
 <数据目录>/
@@ -245,15 +251,15 @@ dsh-pet.exe（Electron 主进程）
 
 ## 排障
 
-| 现象 | 处理 |
-| --- | --- |
-| 桌面没有宠物 | 设置页「显示在桌面」是否勾上；托盘「重载配置」；看 `app.log` |
-| 碎碎念/对话报「缺少 API Key」 | 「本地服务」填对应密钥，或把服务商切到不需要密钥的本机 Ollama |
-| 报「模型接口返回 HTTP 401」 | 密钥与端点不匹配（DeepSeek 的 key 不能用于自定义端点） |
-| 余额只弹一句文字说明 | 该服务商没有余额接口或缺密钥；气泡第二行会给出 provider id 与原因 |
-| 端口 7340 被占用 | 会自动顺延；要固定用 `dsh-pet --port 7500`（或 `npm run app -- --port 7500`），或设 `DSH_PET_APP_PORT=7500` |
-| 装到 Program Files 后数据不在安装目录 | 那里对普通用户不可写，应用自动回落到用户目录；改用默认的 per-user 安装位置即可 |
-| 想看详细日志 | `DSH_PET_APP_DEBUG=1 npm run app`，或直接看 `app.log` |
+| 现象                                  | 处理                                                                                                        |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| 桌面没有宠物                          | 设置页「显示在桌面」是否勾上；托盘「重载配置」；看 `app.log`                                                |
+| 碎碎念/对话报「缺少 API Key」         | 「本地服务」填对应密钥，或把服务商切到不需要密钥的本机 Ollama                                               |
+| 报「模型接口返回 HTTP 401」           | 密钥与端点不匹配（DeepSeek 的 key 不能用于自定义端点）                                                      |
+| 余额只弹一句文字说明                  | 该服务商没有余额接口或缺密钥；气泡第二行会给出 provider id 与原因                                           |
+| 端口 7340 被占用                      | 会自动顺延；要固定用 `dsh-pet --port 7500`（或 `npm run app -- --port 7500`），或设 `DSH_PET_APP_PORT=7500` |
+| 装到 Program Files 后数据不在安装目录 | 那里对普通用户不可写，应用自动回落到用户目录；改用默认的 per-user 安装位置即可                              |
+| 想看详细日志                          | `DSH_PET_APP_DEBUG=1 npm run app`，或直接看 `app.log`                                                       |
 
 ---
 

@@ -1202,7 +1202,7 @@ class PetSprite {
       { label: '碎碎念', action: 'whisper' },
       { label: '对话', action: 'chat' },
       { label: '回到初始位置', action: 'home' },
-      // 改配置文件后免去回设置页点保存：请宿主重启桌面 Helper（全部桌面宠物窗口按最新配置重建）。
+      // 改配置文件后免去回设置页点保存：请宿主重建桌面窗口（全部桌面宠物窗口按最新配置重建）。
       // 放在最后：它是"重新加载"这类维护动作，与上面几个宠物互动项语义不同。
       { label: '重载配置', action: 'reload' },
     );
@@ -1255,7 +1255,7 @@ class PetSprite {
       return;
     }
     if (leaf.action === 'reload') {
-      this.reloadDesktop(); // 请宿主重启桌面 Helper：全部桌面宠物窗口按最新配置重建
+      this.reloadDesktop(); // 请宿主重建桌面窗口：全部桌面宠物窗口按最新配置重建
       return;
     }
     if (!leaf.anim) return;
@@ -1360,7 +1360,7 @@ class PetSprite {
     this.position();
   }
 
-  // 「重载配置」菜单：请宿主重启桌面 Helper —— 与设置页「保存」**同一条**重启路径
+  // 「重载配置」菜单：请宿主重建桌面窗口 —— 与设置页「保存」**同一条**重启路径
   // （宿主 POST /reload → syncDesktop：串行队列 + 等旧进程真正退出再起新的）。
   // 为什么不在渲染端就地重拉配置：① 每只宠物一个窗口是宿主按 DSH_PET_PETS 建的，
   // 就地重拉改不了宠物数量/display/size；② 本页的余额/工作状态等全局轮询是一次性启动的

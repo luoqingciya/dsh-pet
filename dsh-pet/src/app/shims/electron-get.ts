@@ -5,7 +5,7 @@
  * `electron.exe`，开发态由启动器先确保缓存里的那份，二者都通过
  * `DSH_PET_ELECTRON_PATH` 显式传给宿主半边）。也就是说
  * `ensureElectronDownload()` 在本地应用里是一条**永远不会走到的路**——
- * 但它被 `helper-process.ts` 静态 import，模块图必须能加载。
+ * 但它被 `electron-runtime.ts` 静态 import，模块图必须能加载。
  *
  * 替身不做任何网络动作（也不把 @electron/get 及其依赖打进应用包），
  * 万一真的走到这里，就明确报错告诉用户该怎么办，而不是静默失败。

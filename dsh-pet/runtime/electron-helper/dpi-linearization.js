@@ -76,8 +76,27 @@ function resolvePetScale(o = {}) {
   return forced > 0 && primary > 0 ? base * (primary / forced) : base;
 }
 
+/**
+ * 非宠物 UI（设置窗）的补偿倍数。
+ *
+ * 宠物窗口自己经 `petScale()` 放大，而设置窗是普通 DIP 布局的页面：线性化把 1 DIP 变成
+ * 1 物理像素之后，940×800 的窗口在 150% 屏上只有原来的 2/3 大。窗口尺寸与页面缩放同时乘
+ * 本值，设置页看到的 CSS 尺寸才与不启用线性化时一致。
+ *
+ * 未启用线性化 / 未探测到缩放时返回 1（什么都不改）。
+ *
+ * @param {{primaryScale?: number, forcedScale?: number}} [o]
+ * @returns {number}
+ */
+function resolveUiScale(o = {}) {
+  const forced = Number(o.forcedScale) || 0;
+  const primary = Number(o.primaryScale) || 0;
+  return forced > 0 && primary > 0 ? primary / forced : 1;
+}
+
 module.exports = {
   shouldLinearize,
   resolveForcedScale,
   resolvePetScale,
+  resolveUiScale,
 };

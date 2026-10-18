@@ -2,8 +2,8 @@
  * 启动时的窗口行为守卫 —— 两个都曾经以"静默"的方式坏过，用户只看到"没有宠物"。
  *
  * ① 宠物窗口的页面路径：`loadFile('index.html')` 是相对 **appPath** 解析的。开发态
- *    appPath = 脚本所在目录，恰好能用；打包后 Helper 与主进程共用同一个 exe，appPath
- *    变成 `resources/app`，于是去找 `resources/app/index.html` → ERR_FILE_NOT_FOUND，
+ *    appPath = 脚本所在目录，恰好能用；打包后 appPath 变成 `resources/app`，
+ *    于是去找 `resources/app/index.html` → ERR_FILE_NOT_FOUND，
  *    窗口创建了但永远是空白（透明窗 → 看起来就是"没出现"）。
  * ② 设置窗的弹出时机：早期用"配置文件是否存在"判断首次运行，但**首次启动并不写
  *    main-config.jsonc**（只有点保存才写），于是每次启动都弹设置窗——用户点开应用
@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 
 const readSource = (rel: string): string => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
 
-const helperMain = readSource('../../runtime/electron-helper/main.js');
+const helperMain = readSource('../../runtime/electron-helper/windows.js');
 const appMain = readSource('./main.ts');
 
 describe('宠物窗口的页面路径', () => {

@@ -74,8 +74,8 @@ const REQUIRED = [
   'lib/app-main.cjs',
   'lib/app-launch.js',
   'lib/app-settings.js',
-  // 桌面 Helper 运行时的全部模块：任何一个缺失，main.js 一 require 就崩（且窗口不出现、没有提示）
-  'runtime/electron-helper/main.js',
+  // 桌面窗口层的全部模块：任何一个缺失，windows.js 一 require 就崩（且窗口不出现、没有提示）
+  'runtime/electron-helper/windows.js',
   'runtime/electron-helper/preload.js',
   'runtime/electron-helper/index.html',
   'runtime/electron-helper/shared-core.js',
@@ -83,14 +83,12 @@ const REQUIRED = [
   'runtime/electron-helper/sprite.js',
   'runtime/electron-helper/events.js',
   'runtime/electron-helper/renderer.js',
-  'runtime/electron-helper/host-liveness.js',
   'runtime/electron-helper/pointer-target.js',
   'runtime/electron-helper/topmost-watchdog.js',
   'runtime/electron-helper/dpi-linearization.js',
   'runtime/electron-helper/desktop-geometry.js',
   'assets/config.jsonc',
   'assets/logo.png',
-  'src/app/entry.cjs',
 ];
 const missing = REQUIRED.filter((rel) => !existsSync(join(ROOT, rel)));
 if (missing.length === 0) ok(`产物齐全（${REQUIRED.length} 项）`);

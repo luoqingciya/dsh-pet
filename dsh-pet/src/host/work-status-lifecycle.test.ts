@@ -122,7 +122,7 @@ before(() => {
   savedHome = process.env.DSH_HOME;
   savedElectron = process.env.DSH_PET_ELECTRON_PATH;
   process.env.DSH_HOME = join(dir, 'home');
-  // 命中一个已存在的文件：桌面 Helper 无论走哪条分支都不会真的下载/拉起
+  // 命中一个已存在的文件：桌面窗口无论走哪条分支都不会真的拉起
   process.env.DSH_PET_ELECTRON_PATH = process.execPath;
 });
 

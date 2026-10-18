@@ -5,15 +5,15 @@
  *
  *   1) 直接吃真实写入方给的路径（零重复，不存在漂移）：
  *      - 用户数据    ← 调用方传 index.ts 的 userRoot（拼 'dsh-pet' 的地方只有那一处）
- *      - Electron    ← 调用方传 helper-process.ts 的 electronLandingDir()（下载方的唯一定义）
+ *      - Electron    ← 调用方传 electron-runtime.ts 的 electronLandingDir()（下载方的唯一定义）
  *
  *   2) 系统规则，本模块按平台镜像一份（写入方不是本仓库的代码，无法调用）：
  *      - 桌面端 userData  ← Electron 的 app.getPath('userData')
  *      - Electron 下载缓存 ← @electron/get 默认 cacheRoot = env-paths('electron').cache
  *
- * 第 2 类里唯一能靠调用消掉的字面量是桌面端应用名（main.js 的 app.setName），
- * 但那个文件是独立 CJS（无构建、不可 import），只能在两处各写一遍——
- * storage-paths.test.ts 直接读 main.js 校验它，改了不同步就红。
+ * 第 2 类里唯一能靠调用消掉的字面量是应用名（app-main 的 app.setName），
+ * 但那是 Electron 主进程（不可 import），只能在两处各写一遍——
+ * storage-paths.test.ts 直接读 src/app/main.ts 校验它，改了不同步就红。
  * 第 2 类的其余部分（env-paths 的平台口径、Electron 的 userData 口径）是上游约定，
  * 用逐平台用例钉住；上游若改口径，这里必须跟着改（测试只保证我们自己没写错）。
  *
@@ -23,8 +23,14 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
-/** 桌面端 Electron userData 目录名（= main.js 的 app.setName 入参） */
-export const DESKTOP_APP_NAME = 'dsh-pet-electron-helper';
+/**
+ * 应用的 Electron profile 目录名（= app-main 的 app.setName 入参）。
+ *
+ * 桌面窗口合并进主进程后，桌宠与应用共用同一个 profile：开发态在系统 userData，
+ * 打包版被 main.ts 重定向到 <安装目录>/data/electron（因此这里推导出的系统路径可能不存在，
+ * exists 会如实报 false）。
+ */
+export const DESKTOP_APP_NAME = 'dsh-pet';
 
 /** Electron 下载缓存的应用名（@electron/get 写死 env-paths('electron')，与插件名无关） */
 const ELECTRON_PATHS_NAME = 'electron';
@@ -46,7 +52,7 @@ export interface StoragePathInput {
    * 本模块不自己拼 'dsh-pet'（拼一遍就多一处会漂移的硬编码）。
    */
   userDataRoot: string;
-  /** Electron 运行时落地目录 —— 传 helper-process.ts 的 electronLandingDir()（下载方的唯一定义） */
+  /** Electron 运行时落地目录 —— 传 electron-runtime.ts 的 electronLandingDir()（下载方的唯一定义） */
   electronDir: string;
   /** 用户主目录（系统级基准目录的兜底） */
   home: string;
@@ -59,7 +65,7 @@ export interface StoragePathInput {
 }
 
 /**
- * 桌面端 userData 目录（Electron app.getPath('userData') 的等价推导）。
+ * 应用 Electron profile 目录（Electron app.getPath('userData') 的等价推导）。
  *
  * 与 Electron 的口径逐平台对齐：
  *   win32  = %APPDATA%\<name>（appData 在 Windows 就是 Roaming）

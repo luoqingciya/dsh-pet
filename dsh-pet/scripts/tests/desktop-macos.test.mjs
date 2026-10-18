@@ -63,7 +63,7 @@ test(
         DSH_PET_SCALE: '1',
       };
       delete env.ELECTRON_RUN_AS_NODE;
-      app = await _electron.launch({ executablePath, args: [join(root, 'runtime/electron-helper/main.js')], env });
+      app = await _electron.launch({ executablePath, args: [join(root, 'runtime/electron-helper/windows.js')], env });
       const page = await app.firstWindow();
       await page.waitForFunction(() => window.__dshPetDebug?.configOk);
       await page.waitForFunction(() => document.visibilityState === 'visible');

@@ -23,7 +23,7 @@ import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { ensureElectronDownload, resolveElectronPath } from '../host/helper-process';
+import { ensureElectronDownload, resolveElectronPath } from './electron-runtime';
 
 /** 包根（本文件在 lib/ 下） */
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');

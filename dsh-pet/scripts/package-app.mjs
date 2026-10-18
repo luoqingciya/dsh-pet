@@ -37,7 +37,7 @@ import { homedir } from 'node:os';
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const PLAT = process.platform;
 
-/** 解析 Electron 运行时目录（与桌面 Helper 同一个来源） */
+/** 解析 Electron 运行时目录（开发态启动器用同一份缓存） */
 function electronDir() {
   const explicit = process.env.DSH_PET_ELECTRON_DIR;
   if (explicit && existsSync(explicit)) return explicit;
@@ -234,8 +234,8 @@ function main() {
         productName: 'dsh-pet',
         version: pkg.version,
         description: pkg.description,
-        // 分发入口：Helper 子进程与应用主进程共用同一个 exe（见 src/app/entry.cjs）
-        main: 'lib/app-entry.cjs',
+        // 应用入口就是主进程本身（桌宠窗口与宿主在同一个进程里，没有角色分发）
+        main: 'lib/app-main.cjs',
         type: 'commonjs',
         license: pkg.license,
       },

@@ -2,7 +2,7 @@
 /**
  * 下载 Electron 运行时到 `$DSH_HOME/electron`（默认 `~/.dsh/electron`）。
  *
- * 为什么是这么薄的一层：真正的下载/校验/解压逻辑在 `src/host/helper-process.ts` 的
+ * 为什么是这么薄的一层：真正的下载/校验/解压逻辑在 `src/app/electron-runtime.ts` 的
  * `ensureElectronDownload()` 里——应用首次启动自动下载走的也是它。以前这里有一份**重复实现**
  * （自己 import @electron/get + extract-zip），两边的镜像、版本、解压方式各写一遍，
  * 改了一处忘另一处就会出现"CI 下好了、用户跑起来又下一遍"这类问题。
@@ -14,7 +14,7 @@
  */
 import { existsSync } from 'node:fs';
 
-import { defaultElectronExe, ensureElectronDownload } from '../host/helper-process';
+import { defaultElectronExe, ensureElectronDownload } from './electron-runtime';
 
 async function main() {
   const existing = defaultElectronExe();

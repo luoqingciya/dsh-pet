@@ -1,15 +1,15 @@
 /**
  * 桌面端「重载配置」契约测试：右键菜单 → POST /dsh-pet-7340/reload → 宿主 syncDesktop()。
  *
- * 背景：桌面宠物的配置只在 Helper 启动时拉一次（renderer.js 的 boot → GET /config），手改配置文件后
- * 桌面端不会自己跟上——此前唯一的生效途径是回设置页点「保存」，而保存只是顺带重启了 Helper。
- * 菜单项「重载配置」把这条路径显式暴露出来（浏览器端刷新页面即可，故为桌面专属）。
+ * 背景：桌面宠物的配置只在窗口建好时拉一次（renderer.js 的 boot → GET /config），手改配置文件后
+ * 桌面端不会自己跟上——此前唯一的生效途径是回设置页点「保存」，而保存只是顺带重建了窗口。
+ * 菜单项「重载配置」把这条路径显式暴露出来。
  *
- * 为什么必须走「宿主重启 Helper」而不是渲染端就地重拉配置：
- *   ① 每只桌面宠物一个窗口，是宿主启动时按 DSH_PET_PETS 建的——就地重拉改不了宠物数量 / display / size；
+ * 为什么必须走「销毁重建窗口」而不是渲染端就地重拉配置：
+ *   ① 每只桌面宠物一个窗口，是宿主按当前配置建的——就地重拉改不了宠物数量 / display / size；
  *   ② 本页的余额 / 触发计数 / 工作状态等全局轮询由 events.js 的 loopsStarted 一次性启动，
  *      就地重建 sprite 会漏启新循环（新宠物没有碎碎念/广播轮询）或留下旧定时器。
- * 因此「重载」必须复用 syncDesktop()（串行队列 + 等旧进程真正退出），不得自己实现一套停/起。
+ * 因此「重载」必须复用 syncDesktop()（串行队列 + 先 stop 再 start），不得自己实现一套停/起。
  *
  * 本文件钉住跨半侧契约（两半各自构建、无法互相 import，只能读源码断言）：
  *   ① 宿主有 POST /reload 路由，且它调用的正是 syncDesktop()，且**不写任何配置文件**；
@@ -30,16 +30,16 @@ const host = readSource('./index.ts');
 const sprite = readSource('../../runtime/electron-helper/sprite.js');
 const menu = readSource('../shared/menu.ts');
 
-describe('桌面端「重载配置」—— 菜单 → 宿主重启 Helper', () => {
+describe('桌面端「重载配置」—— 菜单 → 宿主重建窗口', () => {
   test('宿主：POST /reload 复用 syncDesktop()，且只重启、不写配置文件', () => {
     const block = /if \(rest === 'reload'\) \{([\s\S]*?)\n {4}\}/.exec(host);
     assert.ok(block, '宿主必须有 /reload 路由');
     const body = block[1];
     assert.ok(/method !== 'POST'/.test(body), 'reload 只接受 POST（重载是动作，不是可缓存的资源）');
-    assert.ok(/void syncDesktop\(\)/.test(body), 'reload 必须复用 syncDesktop()：与保存同一条重启路径');
+    assert.ok(/void syncDesktop\(\)/.test(body), 'reload 必须复用 syncDesktop()：与保存同一条重建路径');
     assert.ok(
       !/writeFile|saveUserConfig|syncUserConfigFromDefault/.test(body),
-      'reload 只重启 Helper，绝不碰配置文件（写盘是 PUT /config 的职责）',
+      'reload 只重建窗口，绝不碰配置文件（写盘是 PUT /config 的职责）',
     );
   });
 
@@ -55,9 +55,15 @@ describe('桌面端「重载配置」—— 菜单 → 宿主重启 Helper', () 
     );
   });
 
-  test('syncDesktop 是唯一的重启入口：两个 /config 写接口、/reload 与 /pet-display 都走它', () => {
+  test('syncDesktop 是唯一的重建入口：两个 /config 写接口、/reload 与 /pet-display 都走它', () => {
     const calls = host.match(/void syncDesktop\(\)/g) ?? [];
     assert.equal(calls.length, 4, 'PUT /config、POST /config、POST /reload、POST /pet-display 都应走 syncDesktop()');
+  });
+
+  test('重建走的是「先 stop 再 start」，不再有跨进程等待', () => {
+    assert.ok(/stopDesktop\('desktop-config-change'\)/.test(host), 'syncDesktop 必须先销毁旧窗口');
+    assert.ok(/startDesktop\(\)/.test(host), 'syncDesktop 必须再按最新配置建窗');
+    assert.ok(!/stopHelperAndWait|HelperProcess/.test(host), '跨进程的停/等/起链路应已整体移除');
   });
 
   test('shared 菜单契约放行 reload（桌面壳注入该动作，类型必须包含它）', () => {

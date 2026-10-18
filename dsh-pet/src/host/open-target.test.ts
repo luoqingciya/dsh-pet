@@ -2,9 +2,9 @@
  * 右键菜单「打开设置」的接线守卫。
  *
  * 链路（改一侧就会断，所以按本仓库既有做法读源码断言）：
- *   宿主 index.ts 注入 `DSH_PET_CONFIG_URL`（本地服务 origin + 路由前缀）
- *   → helper 主进程把它沿 query 交给渲染端（`ORIGIN` = 本地服务 origin，端口变了自动跟随）
- *   → 渲染端菜单首项「打开设置」action=open-site → 主进程 shell.openExternal(ORIGIN)。
+ *   宿主 index.ts 把 `configUrl`（本地服务 origin + 路由前缀）交给桌面窗口层
+ *   → windows.js 把它沿 query 交给渲染端（`ORIGIN` = 本地服务 origin，端口变了自动跟随）
+ *   → 渲染端菜单首项「打开设置」action=open-site → 窗口层 shell.openExternal(ORIGIN)。
  *
  * 应用形态只有一种（本地桌面应用），所以既没有"按宿主形态分派"，也没有 DSH 的启动令牌。
  */
@@ -17,25 +17,29 @@ import { fileURLToPath } from 'node:url';
 const readSource = (rel: string): string => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
 
 const host = readSource('./index.ts');
-const main = readSource('../../runtime/electron-helper/main.js');
+const main = readSource('../../runtime/electron-helper/windows.js');
 const preload = readSource('../../runtime/electron-helper/preload.js');
 const sprite = readSource('../../runtime/electron-helper/sprite.js');
 
 describe('右键「打开设置」', () => {
-  test('宿主：只注入配置地址，不再有宿主形态 / 令牌相关变量', () => {
+  test('宿主：只交配置地址，不再有宿主形态 / 令牌相关变量', () => {
     assert.ok(
-      /DSH_PET_CONFIG_URL: configUrl/.test(host),
-      'launchHelper 必须把配置地址注入 Helper（渲染端的 ORIGIN 由它推导）',
+      /const configUrl = `http:\/\/127\.0\.0\.1:\$\{port\}\$\{ROUTE_PREFIX\}\/config`/.test(host),
+      '宿主必须按「本地服务 origin + 路由前缀」拼出 configUrl（渲染端的 ORIGIN 由它推导）',
+    );
+    assert.ok(
+      /desktop\.start\(\{ pets: desktopPetList\(\), configUrl, request: desktopRequest \}\)/.test(host),
+      'configUrl 必须交给桌面窗口层（漏传则渲染端拿不到地址，宠物窗口空白）',
     );
     for (const name of ['DSH_PET_OPEN_TARGET', 'DSH_PET_SITE_URL']) {
       assert.ok(!host.includes(name), `不得再注入 ${name}（那是 DSH 宿主时代的间接层）`);
     }
   });
 
-  test('helper 主进程：open-site 直接交给系统浏览器，没有 dsh:// 分支', () => {
+  test('窗口层：open-site 直接交给系统浏览器，没有 dsh:// 分支', () => {
     assert.ok(
       /ipcMain\.on\('pet:open-site',[\s\S]*?openSite\(url\)/.test(main),
-      'main.js 必须把 open-site 交给 openSite(url)',
+      'windows.js 必须把 open-site 交给 openSite(url)',
     );
     assert.ok(
       /const openSite = \(url\) => \{\s*shell\.openExternal\(url\)/.test(main),

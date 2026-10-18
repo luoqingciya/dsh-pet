@@ -1,13 +1,14 @@
 /**
  * dsh-pet 应用主进程。
  *
- * 组成（每一块都复用已有的宿主半边，不另写业务）：
+ * 组成：
  *   1. **本地宿主**：`createAppContext` 提供真实的 credentials / llm / 事件总线，
- *      `src/host` 的 `apply()` 在其上跑起来（路由表、配置合并、素材归属、桌面 Helper 守护都在那一份里）；
+ *      `src/host` 的 `apply()` 在其上跑起来（路由表、配置合并、素材归属、桌面窗口启停都在那一份里）；
  *   2. **本地服务**：`listenAppServer` 监听 127.0.0.1，把宿主路由原样接上，
  *      并额外提供设置页与「本地服务」接口（`web-ui.ts`）；
- *   3. **桌面宠物**：由宿主自己拉起 Electron 透明小窗（`runtime/electron-helper`）——
- *      本文件不碰窗口，只保证服务和 Electron 路径可用；
+ *   3. **桌面宠物**：**本进程自己**开透明置顶小窗（`runtime/electron-helper/windows.js`，
+ *      经 `desktop.ts` 适配）。渲染端的请求走 `dsh-pet-bridge://` scheme，
+ *      `protocol.handle` 直接调宿主路由——同进程内一次函数调用，没有子进程、没有管道；
  *   4. **托盘 + 设置窗口**：应用的壳。关闭设置窗口不退出，退出走托盘菜单。
  *
  * 边界：运行期不 import 任何 `@deepseek-ai/*`（构建期由 alias 换成 `src/app/shims/*` 的替身），
@@ -27,6 +28,7 @@ import {
 import { dirname, join } from 'node:path';
 
 import { apply } from '../host/index';
+import { createDesktopService, prepareDesktopRuntime, reportPrimaryScale } from './desktop';
 import { listenAppServer } from './server';
 import type { RegisteredRoute } from './server';
 import { createAppContext } from './context';
@@ -98,8 +100,35 @@ if (app.isPackaged) {
   app.setPath('userData', join(DATA_ROOT, 'electron'));
   app.setPath('sessionData', join(DATA_ROOT, 'electron'));
 }
-// 桌面 Helper 用同一份 Electron 二进制（打包版即应用自带的那份，开发态即缓存里的那份）
-process.env.DSH_PET_ELECTRON_PATH = process.execPath;
+
+/**
+ * DPI 探测子进程模式（`dsh-pet.exe <main.cjs> --dpi-probe`）。
+ *
+ * 为什么要再拉起一个自己：`force-device-scale-factor` 一旦生效，`screen` API 只会报被强制的值，
+ * 真实主屏缩放就再也读不到了。所以首次启动先起一个**不带该开关**的短命子进程读一次并落盘。
+ *
+ * 这个分支必须在**任何**初始化之前判定：不抢单实例锁、不起服务、不建窗口、不读配置。
+ */
+const IS_DPI_PROBE = process.argv.includes('--dpi-probe');
+
+// 探测进程用独立 profile：它和主实例几乎同时启动，共用同一个 userData 会撞 Chromium 的
+// ProcessSingleton 锁（"profile in use"）。它只需要 screen 模块，与 profile 无关。
+if (IS_DPI_PROBE) {
+  app.setPath('userData', join(app.getPath('temp'), 'dsh-pet-dpi-probe'));
+}
+
+/**
+ * 桌面窗口层的运行前准备：**必须在 ready 之前**（硬件加速开关与 force-device-scale-factor
+ * 都只能那时设）。返回的 uiScale 用于把设置窗按同样的比例补偿回来。
+ *
+ * 探测子进程也要走这一句：它会**装载**窗口层模块（`protocol.registerSchemesAsPrivileged`
+ * 只能在 ready 前调用），只是跳过 DPI 线性化本身（见 probeMode）。
+ */
+const DPI = prepareDesktopRuntime({
+  packageRoot: PACKAGE_ROOT,
+  appMainScript: __filename,
+  probeMode: IS_DPI_PROBE,
+});
 
 /**
  * 落盘日志。
@@ -118,7 +147,7 @@ function appendLog(line: string): void {
     const dir = petDataDir();
     mkdirSync(dir, { recursive: true });
     const file = join(dir, 'app.log');
-    // 超过上限就滚成 app.log.1（只留一代）：长时间运行 + Helper 反复重启时日志会一直长
+    // 超过上限就滚成 app.log.1（只留一代）：长时间运行 + 窗口反复重建时日志会一直长
     try {
       if (statSync(file).size > LOG_MAX_BYTES) renameSync(file, `${file}.1`);
     } catch {
@@ -133,7 +162,7 @@ function appendLog(line: string): void {
 /**
  * 应用日志（宿主半边的 `ctx.logger` 也用这一份）。
  *
- * `warn` / `error` **同时落盘**：桌面 Helper 是子进程，它的 stderr 由宿主经 `logger.warn`
+ * `warn` / `error` **同时落盘**：桌面窗口 是子进程，它的 stderr 由宿主经 `logger.warn`
  * 转发——不落盘的话，"宠物窗口没出现"这类问题在双击启动的场景下完全无从排查
  * （控制台不存在，用户只能看到"只有设置窗"）。
  */
@@ -167,9 +196,9 @@ process.on('unhandledRejection', (reason: unknown) => {
  * 单实例：第二次启动只把设置窗口唤到前台，不重开一套服务与宠物。
  *
  * 注意：拿不到锁时**必须立刻停止启动流程**——只调 `app.quit()` 是不够的，
- * `whenReady` 回调仍会执行，结果是两个实例抢端口、各起一套 Helper（实测）。
+ * `whenReady` 回调仍会执行，结果是两个实例抢端口、各起一套窗口（实测）。
  */
-const GOT_LOCK = app.requestSingleInstanceLock();
+const GOT_LOCK = IS_DPI_PROBE ? true : app.requestSingleInstanceLock();
 if (!GOT_LOCK) {
   appendLog('[single-instance] 已有实例在运行，本进程退出');
 }
@@ -198,10 +227,12 @@ function openSettings(): void {
     return;
   }
   settingsWindow = new BrowserWindow({
-    width: 940,
-    height: 800,
-    minWidth: 720,
-    minHeight: 560,
+    // DPI 线性化把 DIP 变成物理像素：窗口尺寸与页面缩放同时乘 uiScale，
+    // 设置页看到的 CSS 尺寸才与不启用线性化时一致（否则 150% 屏上会缩成 2/3）。
+    width: Math.round(940 * DPI.uiScale),
+    height: Math.round(800 * DPI.uiScale),
+    minWidth: Math.round(720 * DPI.uiScale),
+    minHeight: Math.round(560 * DPI.uiScale),
     title: 'dsh-pet 设置',
     autoHideMenuBar: true,
     backgroundColor: '#141417',
@@ -209,6 +240,7 @@ function openSettings(): void {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      zoomFactor: DPI.uiScale,
     },
   });
   settingsWindow.on('closed', () => {
@@ -249,7 +281,10 @@ function showNotification(title: string, body: string, iconName: string): void {
 function createTray(): void {
   const iconPath = join(PACKAGE_ROOT, 'assets', 'logo.png');
   const image = existsSync(iconPath) ? nativeImage.createFromPath(iconPath) : nativeImage.createEmpty();
-  tray = new Tray(image.isEmpty() ? nativeImage.createEmpty() : image.resize({ width: 20, height: 20 }));
+  // 托盘图标尺寸同样要补偿 DPI 线性化：DSF=1 时 20px 就是 20 物理像素，
+  // 在 150% 屏上会比系统托盘里的其它图标小一圈（它们按 DIP 给 20 → 30 物理像素）。
+  const trayPx = Math.round(20 * DPI.uiScale);
+  tray = new Tray(image.isEmpty() ? nativeImage.createEmpty() : image.resize({ width: trayPx, height: trayPx }));
   tray.setToolTip('dsh-pet');
   const rebuild = (): void => {
     tray?.setContextMenu(
@@ -258,7 +293,7 @@ function createTray(): void {
         {
           label: '重载配置',
           click: () => {
-            // 与右键菜单「重载配置」同一条路由：重启桌面 Helper，按最新配置重建全部宠物窗口
+            // 与右键菜单「重载配置」同一条路由：重建桌面窗口，按最新配置重建全部宠物窗口
             void fetch(`http://127.0.0.1:${port}/dsh-pet-7340/reload`, { method: 'POST' }).catch((error: unknown) =>
               log.warn(`重载配置失败：${error instanceof Error ? error.message : String(error)}`),
             );
@@ -373,12 +408,15 @@ async function bootstrap(): Promise<void> {
 
   const routes: RegisteredRoute[] = [];
   const portRef = { value: 0 };
+  // 桌面窗口服务：宿主决定"哪些宠物该显示"，这里负责"怎么开出来"（见 desktop.ts）
+  const desktop = createDesktopService({ packageRoot: PACKAGE_ROOT, logger: log });
   context = createAppContext({
     port: () => portRef.value,
     logger: log,
     routes,
     config: () => readAppConfig(),
     secrets: () => readSecrets(),
+    petDesktop: desktop,
   });
 
   const webUi = createWebUi({
@@ -412,7 +450,7 @@ async function bootstrap(): Promise<void> {
   port = server.port;
   appendLog(`[server] listening on ${port}`);
 
-  // 插件宿主半边：路由表、配置合并、状态仓、桌面 Helper（含守护循环）全在这一句里
+  // 插件宿主半边：路由表、配置合并、状态仓、桌面窗口（含守护循环）全在这一句里
   apply(context.ctx);
   wrapChatRoute();
   appendLog(`[host] apply done, routes=${routes.length}`);
@@ -444,11 +482,14 @@ function appVersion(): string {
 
 // ---------- 生命周期 ----------
 
-if (GOT_LOCK) {
+if (IS_DPI_PROBE) {
+  // 探测进程：ready 之后读主屏缩放、打到 stdout、退出（父进程按标记抓值）
+  app.whenReady().then(() => reportPrimaryScale(PACKAGE_ROOT));
+} else if (GOT_LOCK) {
   app.on('second-instance', () => openSettings());
 
   app.on('window-all-closed', () => {
-    // 托盘常驻：关掉设置窗口不等于退出应用（宠物还在桌面上）
+    // 托盘常驻：关掉设置窗口不等于退出应用（宠物窗口是独立的一批，但都关掉也不退出）
   });
 
   app.on('before-quit', (event) => {
@@ -457,7 +498,7 @@ if (GOT_LOCK) {
     event.preventDefault();
     void (async () => {
       stopNotify?.();
-      // 先释放插件的 effect（停桌面 Helper、清定时器），再关服务
+      // 先释放宿主的 effect（销毁桌面窗口、清定时器），再关服务
       await context?.dispose().catch(() => {});
       await server?.close().catch(() => {});
       appendLog('[quit] 已退出');

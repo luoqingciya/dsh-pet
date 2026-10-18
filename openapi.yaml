@@ -2,7 +2,7 @@ openapi: 3.1.0
 
 info:
   title: dsh-pet HTTP API
-  version: 0.4.5
+  version: 0.5.0
   summary: dsh-pet 本地 HTTP 接口
   description: |
     dsh-pet 在本地 `127.0.0.1` 上起一个 HTTP 服务，把全部能力挂在**一条前缀路由** `/dsh-pet-7340` 下。
@@ -511,7 +511,7 @@ paths:
         - 用户层文件**存在但连 JSONC 都解析不了**（真损坏）时，默认**先不写盘**，
           返回 `409` 让调用方确认——因为白名单重建会把文件里剩下的内容整份丢掉且静默。
           确认要重建时加 `?force=1`。
-        - 保存成功后宿主会**异步**重启桌面 Helper（`display`/`size` 等可能变化），
+        - 保存成功后宿主会**异步**重建桌面窗口（`display`/`size` 等可能变化），
           不阻塞响应。
       parameters:
         - name: force
@@ -596,7 +596,7 @@ paths:
         这既是「恢复默认」，也顺便给用户留下一份可直接编辑的完整配置，
         不必再自己从包内复制一份。
 
-        写盘后异步重启桌面 Helper，并返回新的成品聚合。
+        写盘后异步重建桌面窗口，并返回新的成品聚合。
       responses:
         "200":
           description: 同步成功，返回新的成品聚合
@@ -631,8 +631,7 @@ paths:
         `<数据目录>/dsh-pet/main-config.jsonc`，文件宠物写 `pet/<前缀>-config.json`（`.jsonc` 同样支持）。
 
         写入语义与 `PUT /config` 一致：白名单重建 + 磁盘原值透传（不抹掉手写的精调字段）。
-        写盘后同样**异步**重启桌面 Helper、不阻塞响应——响应可能来不及送达（发起者往往就是
-        即将被换掉的那个桌面 Helper 进程），调用方按 fire-and-forget 处理即可。
+        写盘后同样**异步**重建桌面窗口、不阻塞响应。调用方按 fire-and-forget 处理即可。
       requestBody:
         required: true
         content:
@@ -768,13 +767,13 @@ paths:
     post:
       tags: [Action]
       operationId: reload
-      summary: 重载桌面端（重启 Helper）
+      summary: 重载桌面端（重建全部宠物窗口）
       description: |
-        重启桌面 Helper 进程，全部桌面宠物窗口按最新配置重建。
+        按磁盘上的最新配置重建全部桌面宠物窗口（手改配置文件后用它生效）。
         与保存配置走**同一条**重启路径（串行队列 + 等旧进程真正退出再起新的），
         因此宠物数量 / `display` / `size` 的变化同样生效。
 
-        **注意**：发起者通常就是即将被重启的那个 Helper，本响应不保证送达。
+        **注意**：窗口会被销毁重建，正在进行的窗口内交互会中断。
         因此实现上不等待重启完成，立刻返回 `200`。
       responses:
         "200":
