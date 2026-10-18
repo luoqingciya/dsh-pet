@@ -347,16 +347,16 @@ export function LocalPanel(): React.ReactElement {
 
       <div className="card">
         <h2>系统通知</h2>
-        <p className="hint">宠物回话完成、余额告急时弹系统通知（窗口失焦时才有意义，所以一律走原生通知）。</p>
+        <p className="hint">宠物回话完成、生成失败、余额告急时弹系统通知（走系统原生通知，不依赖窗口焦点）。</p>
         <div className="row">
-          <label>对话回复</label>
+          <label>对话结果</label>
           <label className="chk">
             <input
               type="checkbox"
               checked={draft.notify.chatReply}
               onChange={(event) => patch({ notify: { ...draft.notify, chatReply: event.target.checked } })}
             />
-            宠物回复完成时弹系统通知
+            回话完成或生成失败时弹系统通知
           </label>
         </div>
         <div className="row">

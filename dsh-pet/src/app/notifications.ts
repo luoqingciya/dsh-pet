@@ -15,7 +15,7 @@
  */
 import { readBalance } from '../shared/state';
 import { balancePercent, type BalanceView } from '../shared/balance';
-import { frameToToast, type NotifyFrame } from '../shared/notify';
+import { NOTIFY_ICONS, frameToToast, type NotifyFrame } from '../shared/notify';
 import type { AppConfig } from './local-config';
 
 /** 轮询间隔（与浏览器容器一致：1s） */
@@ -70,9 +70,11 @@ export function startNotifyWatcher(deps: NotifyWatcherDeps): () => void {
     notifyCounter = leaf.counter ?? 0;
     const toast = frameToToast((leaf.data ?? {}) as NotifyFrame);
     if (!toast) return;
-    // 开关只关「对话完成」一类（本地唯一会产生的是它）；其余类型保持放行
-    const config = deps.config();
-    if (toast.title === '对话完成' && !config.notify.chatReply) return;
+    // 「对话结果」开关管**完成与失败**两种：本地只可能产生这两类帧，
+    // 而按标题字符串（'对话完成'）判定会漏掉失败——用户关掉开关后仍会被「生成失败」打扰。
+    // 判据用图标名（稳定标识）而不是中文标题，避免文案改动让门控悄悄失效。
+    const isChatResult = toast.icon === NOTIFY_ICONS.done || toast.icon === NOTIFY_ICONS.error;
+    if (isChatResult && !deps.config().notify.chatReply) return;
     deps.show(toast.title, toast.body, toast.icon);
   };
 

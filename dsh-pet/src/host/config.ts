@@ -16,7 +16,7 @@
  * 合并规则（唯一规则）：
  *   - 内置默认配置是唯一默认值来源（「代码里的配置绝对正确」）；
  *   - 覆盖文件写了 → 用自己的值；**没写 → 静默填内置默认值**（结构性常态，不告警——
- *     设置页写的用户层本就只含 pets + notificationsEnabled；文件宠物也可以写得很短）；
+ *     设置页写的用户层本就只含 pets；文件宠物也可以写得很短）；
  *   - **对象字段也是整段替换**（`physics` / `eventsRefreshSec` / `whisperModel` … 都适用）：
  *     写了就整段用自己的，缺的子键**不会**从内置默认补回来——消费端各自兜底
  *     （如余额周期读不到就按 1800、碎碎念按 300）；
@@ -395,8 +395,6 @@ function topFieldValid(key: string, value: unknown): boolean {
       const n = Number(value);
       return Number.isFinite(n) && n >= 0;
     }
-    case 'notificationsEnabled':
-      return typeof value === 'boolean';
     case 'whisperImageEnabled':
       return typeof value === 'boolean';
     case 'chatImageEnabled':
@@ -654,7 +652,7 @@ export function findPetInstance(
 
 /**
  * 保存用户层（PUT /config）：更新 main-config.jsonc，接受可编辑字段（pets + 全局开关：
- * notificationsEnabled / whisperImageEnabled / chatImageEnabled / confineToScreen + physics
+ * whisperImageEnabled / chatImageEnabled / confineToScreen + physics
  * + whisperModel / chatModel + chatMemoryRounds + chatImageLimit）。
  * 编辑语义：**非白名单顶层字段（whisperPrompt / eventsRefreshSec / memes 等）从
  * `existing`（当前磁盘上的用户文件原对象）原样透传保留**——
@@ -714,8 +712,6 @@ export function saveUserConfig(
       position: { corner, marginX, marginY },
     });
   }
-  const ne = o.notificationsEnabled;
-  if (ne !== undefined && typeof ne !== 'boolean') return null;
   const wie = o.whisperImageEnabled;
   if (wie !== undefined && typeof wie !== 'boolean') return null;
   const cie = o.chatImageEnabled;
@@ -755,7 +751,6 @@ export function saveUserConfig(
   // 白名单可编辑字段：pets 来自请求体，其余（四个全局开关 / physics / 两个模型 /
   // 对话历史条数）同样只在请求体**真的传了**时才写（未传则走下面的透传保留，不凭空造值）
   const outConfig: { pets: unknown[]; [key: string]: unknown } = { pets: out };
-  if (ne !== undefined) outConfig.notificationsEnabled = ne;
   if (wie !== undefined) outConfig.whisperImageEnabled = wie;
   if (cie !== undefined) outConfig.chatImageEnabled = cie;
   if (cts !== undefined) outConfig.confineToScreen = cts;
@@ -771,7 +766,6 @@ export function saveUserConfig(
   // 白名单字段只在「请求体传了」时才算白名单（已由上方写入）；未传时走这里透传磁盘旧值——
   // 否则整包调用的调用方漏传一个字段，就会把用户既有设置悄悄抹成默认。
   const bodyOwned = new Set(['pets']);
-  if (ne !== undefined) bodyOwned.add('notificationsEnabled');
   if (wie !== undefined) bodyOwned.add('whisperImageEnabled');
   if (cie !== undefined) bodyOwned.add('chatImageEnabled');
   if (cts !== undefined) bodyOwned.add('confineToScreen');

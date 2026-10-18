@@ -2,7 +2,7 @@ openapi: 3.1.0
 
 info:
   title: dsh-pet HTTP API
-  version: 0.5.0
+  version: 0.5.1
   summary: dsh-pet 本地 HTTP 接口
   description: |
     dsh-pet 在本地 `127.0.0.1` 上起一个 HTTP 服务，把全部能力挂在**一条前缀路由** `/dsh-pet-7340` 下。
@@ -503,7 +503,7 @@ paths:
 
         - **只白名单字段会被保留**：`pets[]` 的 `id`/`name`/`size`/`balanceEnabled`/
           `whisperEnabled`/`workStatusEnabled`/`fixedEnabled`/`display`/`position`，以及顶层
-          `notificationsEnabled`/`whisperImageEnabled`/`chatImageEnabled`/`confineToScreen`/
+          `whisperImageEnabled`/`chatImageEnabled`/`confineToScreen`/
           `physics`/`whisperModel`/`chatModel`/`chatMemoryRounds`/`chatImageLimit`。
           其余字段会沿用磁盘上用户文件里的原值（透传保留），所以设置页保存
           **不会抹掉**你手写的精调配置（`whisperPrompt`/`memes`/`eventsRefreshSec` 等）。
@@ -544,7 +544,6 @@ paths:
                         corner: bottom-right
                         marginX: 24
                         marginY: 24
-                  notificationsEnabled: true
                   whisperImageEnabled: true
                   chatImageEnabled: true
       responses:
@@ -1495,8 +1494,6 @@ components:
           minItems: 1
           items:
             $ref: "#/components/schemas/PetEntry"
-        notificationsEnabled:
-          type: boolean
         whisperImageEnabled:
           type: boolean
         chatImageEnabled:

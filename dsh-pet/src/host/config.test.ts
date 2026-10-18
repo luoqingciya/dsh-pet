@@ -67,7 +67,6 @@ const BASE = {
   },
   whisperPrompt: '你是桌面宠物',
   chatMemoryRounds: 4,
-  notificationsEnabled: true,
   eventsRefreshSec: { balance: 1800, whisper: 300 },
   workStatusTexts: [['在干活']],
 };
@@ -310,14 +309,14 @@ describe('readUserConfig —— 用户层读取必须容忍 JSONC 注释（保�
         ',\n  "memes": { "可爱": "我改过的描述" }\n}\n',
     );
     try {
-      const out = saveUserConfig({ pets: PETS, notificationsEnabled: true }, readUserConfig(paths)) as Record<
+      const out = saveUserConfig({ pets: PETS, whisperImageEnabled: true }, readUserConfig(paths)) as Record<
         string,
         unknown
       >;
       assert.deepEqual(out.animations, BASE.animations, 'animations 不得在保存时丢失');
       assert.deepEqual(out.physics, BASE.physics, 'physics 不得在保存时丢失');
       assert.deepEqual(out.memes, { 可爱: '我改过的描述' }, '手写的 memes 不得在保存时丢失');
-      assert.equal(out.notificationsEnabled, true, '白名单字段仍以请求体为准');
+      assert.equal(out.whisperImageEnabled, true, '白名单字段仍以请求体为准');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

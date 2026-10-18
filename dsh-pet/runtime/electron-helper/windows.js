@@ -162,13 +162,7 @@ let probeCommand = null;
 function probePrimaryScale() {
   const cmd = probeCommand || { command: process.execPath, args: [__filename] };
   const opts = {
-    env: {
-      ...process.env,
-      DSH_PET_DPI_PROBE: '1',
-      DSH_PET_BRIDGE: '0',
-      DSH_PET_SMOKE: '0',
-      ...(cmd.env || {}),
-    },
+    env: { ...process.env, DSH_PET_DPI_PROBE: '1', ...(cmd.env || {}) },
     timeout: 20000,
     encoding: 'utf8',
     windowsHide: true,

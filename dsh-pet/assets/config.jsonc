@@ -10,7 +10,7 @@
 //     chatMemoryRounds / whisperModel / chatModel / eventsRefreshSec
 //   · 条目级（每个条目一份：main 一份、每个种类各一份；种类文件顶层可覆盖）：
 //     whisperPrompt / memes / workStatusTexts / animations / animationWeights
-//   · 只读 main（写了也只认 main 条目那份）：notificationsEnabled / eventsRefreshSec.balance
+//   · 只读 main（写了也只认 main 条目那份）：eventsRefreshSec.balance
 // 合并口径：所有顶层字段都是**整段替换**——写了就整段用自己的，缺的子键不会从本文件补回来
 //   （消费端各自兜底：余额周期读不到按 1800、碎碎念按 300）。
 {
@@ -86,11 +86,6 @@
     "就一碗": "抱着超大碗说要来你家吃饭就一碗，适合蹭饭、饭量大、登门讨饭",
     "Ciallo": "比耶眨眼卖萌问候 Ciallo～，适合打招呼、元气开场、卖萌"
   },
-  // ===================== 系统通知总开关 =====================
-  // 对话完成 / 生成失败 / 输出截断 / 权限申请 / 用户选择 在窗口失焦时弹出系统级通知（桌面右下角）。
-  // 不需要时改为 false（修改后刷新或重启生效）。必填布尔值，缺失即配置错误；
-  // 也可在用户配置（main-config.jsonc）顶层覆盖，设置页保存宠物时会保留该字段。
-  "notificationsEnabled": true,
   // ===================== 拖拽抛掷：锁定在当前屏幕（根字段，不属于 physics） =====================
   // 多屏用户：true = 甩出去的宠物只在松手时所在那块屏幕内弹（屏缝当墙，不飞到隔壁屏）；
   // false（默认）= 屏缝两侧都有屏时照常跨屏飞行、落到隔壁屏（现状）。

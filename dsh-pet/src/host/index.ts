@@ -520,7 +520,7 @@ export function apply(ctx: any): void {
    * 完全一致，不存在"两套语义慢慢漂移"。素材走文件绝对路径，二进制不过 JSON。
    */
   const desktopRequest = async (req: DesktopRequest): Promise<DesktopResponse> => {
-    const result = await handlePetRoute(req.url, req.method, req.body);
+    const result = await handlePetRouteWithTurn(req.url, req.method, req.body);
     if (result.kind === 'file') {
       // file 分支恒 200（404/400 已由 text 分支表达）
       return { status: 200, contentType: result.contentType, file: result.file };
@@ -639,7 +639,7 @@ export function apply(ctx: any): void {
               status: 400,
               obj: {
                 error:
-                  'invalid pet config: expected { pets:[{name?,id,size,balanceEnabled,display,position:{corner,marginX,marginY}}] }（display 为 web/desktop/both/none 之一；可选顶层 notificationsEnabled / whisperImageEnabled / chatImageEnabled 布尔；可选宠物布尔 whisperEnabled / workStatusEnabled / fixedEnabled）',
+                  'invalid pet config: expected { pets:[{name?,id,size,balanceEnabled,display,position:{corner,marginX,marginY}}] }（display 为 web/desktop/both/none 之一；可选顶层 whisperImageEnabled / chatImageEnabled 布尔；可选宠物布尔 whisperEnabled / workStatusEnabled / fixedEnabled）',
               },
             };
           }
@@ -1087,6 +1087,56 @@ export function apply(ctx: any): void {
     return { kind: 'file', file, contentType: mimeOf(file) };
   };
 
+  /**
+   * 本地对话的「会话」标识：应用里没有真实会话，合成的 turn 事件统一挂在这个 id 下
+   * （工作状态按会话聚合；与 `src/app/context.ts` 的 LOCAL_SESSION_ID 一致，改一处要改两处）。
+   */
+  const CHAT_SESSION = { header: { id: 'dsh-pet-local' } };
+
+  /** 把一条合成的会话事件投回总线（宿主同时是生产者与消费者：事件经 ctx.emit 回到上面的监听器） */
+  const emitTurn = (type: 'turn/start' | 'turn/end', ok = false, message?: string): void => {
+    try {
+      ctx.emit?.(
+        'session/event',
+        CHAT_SESSION,
+        type === 'turn/start'
+          ? { type: 'turn/start' }
+          : {
+              type: 'turn/end',
+              data: {
+                reason: ok ? { kind: 'completed' } : { kind: 'error', error: { message: message ?? '生成失败' } },
+              },
+            },
+      );
+    } catch (e) {
+      ctx.logger?.warn?.(`[dsh-pet] 投递 ${type} 失败：${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
+  /**
+   * `handlePetRoute` + 一次对话的 turn/start → turn/end。
+   *
+   * **为什么必须收口在这里**：`/chat` 有两条入口——HTTP（设置页 / 脚本）与桌面窗口的
+   * `dsh-pet-bridge://` scheme。从前这一步包在 HTTP 路由**外面**，于是桌面宠物自己发起的对话
+   * （也就是用户点宠物聊天的那条路）完全不产生 turn 事件：对话状态联动不切动画、
+   * 也不弹「对话完成」通知。两条路都落到 handlePetRoute，包在它外面才覆盖全部入口。
+   */
+  const handlePetRouteWithTurn = async (rawUrl: string, method: string, body?: string): Promise<RouteResult> => {
+    if (method !== 'POST' || !rawUrl.startsWith(`${ROUTE_PREFIX}/chat`)) {
+      return handlePetRoute(rawUrl, method, body);
+    }
+    emitTurn('turn/start');
+    try {
+      const result = await handlePetRoute(rawUrl, method, body);
+      const obj = result.kind === 'json' ? (result.obj as { ok?: boolean; message?: string }) : undefined;
+      emitTurn('turn/end', obj?.ok === true, obj?.message);
+      return result;
+    } catch (e) {
+      emitTurn('turn/end', false, e instanceof Error ? e.message : String(e));
+      throw e;
+    }
+  };
+
   ctx.effect(
     () =>
       ctx.webServer.register({
@@ -1095,7 +1145,7 @@ export function apply(ctx: any): void {
         handler: async (req: IncomingMessage, res: ServerResponse) => {
           try {
             const body = req.method === 'PUT' || req.method === 'POST' ? await readBody(req) : undefined;
-            const result = await handlePetRoute(req.url ?? '/', req.method ?? 'GET', body);
+            const result = await handlePetRouteWithTurn(req.url ?? '/', req.method ?? 'GET', body);
             if (result.kind === 'json') sendJson(res, result.status, result.obj, result.headers);
             else if (result.kind === 'text') sendText(res, result.status, result.body);
             else sendFile(res, result.file, result.contentType); // 非 async：流在 open 后自己 pipe，错误内部收口

@@ -78,7 +78,7 @@ Windows 直接双击仓库里的 `dsh-pet.cmd`；macOS / Linux 运行 `./dsh-pet
 - **余额展示**：按已用百分比分档播动画 + 头顶气泡（DeepSeek 余额 / OpenCode Zen Go 与 Command Code 的额度窗口）
 - **碎碎念与对话**：按周期自动生成一句；右键随时开口；对话有记忆（落盘、重启不丢）
 - **工作状态**：它回话时切「思考 → 成功 / 出错」，常驻气泡
-- **系统通知**：对话回复完成、余额告急时弹原生通知
+- **系统通知**：回话完成 / 生成失败、余额告急时弹原生通知
 - **自定义**：往数据目录丢 VP9-alpha `.webm` 就是新动画；`pet/` 下建配置就能加**全新宠物种类**
 - **无障碍**：支持 `prefers-reduced-motion`（减少动效时跳过 Q 弹与淡入）
 
@@ -105,7 +105,7 @@ Windows 直接双击仓库里的 `dsh-pet.cmd`；macOS / Linux 运行 `./dsh-pet
 | 接口地址   | OpenAI 兼容根地址（不带 `/chat/completions`）                                                                   |
 | API Key    | 存在本机 `secrets.json`，**用系统密钥加密**（Windows DPAPI / macOS 钥匙串 / Linux libsecret）；只写不读、不回显 |
 | 余额服务商 | 默认跟随模型服务商，也可单独指定（对话走 Ollama、余额查 DeepSeek）                                              |
-| 通知       | 对话回复 / 余额告急                                                                                             |
+| 通知       | 对话结果（完成或失败）/ 余额告急                                                                                |
 
 点「测试连通」可直接验证端点 + 密钥 + 模型是否可用，失败会把服务端返回的原文带出来。
 

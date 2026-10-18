@@ -318,65 +318,6 @@ function createTray(): void {
 }
 
 /**
- * 把「一次对话生成」合成一对会话事件投给插件。
- *
- * 这是本地模式补齐**工作状态联动**与**系统通知**的关键：插件那两条链路只认
- * `session/event`（turn/start、turn/end），本地没有 DSH 会话，就由应用在真实的
- * 生成前后各投一条——插件的工作状态机与通知帧因此**原样工作**，不需要为本地模式
- * 另写一套状态机，也不会出现"两套语义慢慢漂移"。
- */
-function emitTurnStart(): void {
-  context?.emit('session/event', { header: { id: 'dsh-pet-local' } }, { type: 'turn/start' });
-}
-
-function emitTurnEnd(ok: boolean, message?: string): void {
-  context?.emit(
-    'session/event',
-    { header: { id: 'dsh-pet-local' } },
-    {
-      type: 'turn/end',
-      data: { reason: ok ? { kind: 'completed' } : { kind: 'error', error: { message: message ?? '生成失败' } } },
-    },
-  );
-}
-
-/**
- * 包一层动作路由：生成前投 turn/start，响应写完后按结果投 turn/end。
- *
- * 只包 `/chat`（用户主动发起、值得弹通知）；`/whisper` 是每 5 分钟一次的自动碎碎念，
- * 给它发"对话完成"通知就是刷屏——这也正是 DSH 里碎碎念不产生通知的同一口径。
- */
-function wrapChatRoute(): void {
-  const route = context?.routes.find((item) => item.path === '/dsh-pet-7340');
-  if (!route) return;
-  const original = route.handler;
-  route.handler = (req, res) => {
-    const isChat = (req.method ?? 'GET') === 'POST' && (req.url ?? '').startsWith('/dsh-pet-7340/chat');
-    if (!isChat) return original(req, res);
-    emitTurnStart();
-    let captured = '';
-    const originalEnd = res.end.bind(res);
-    // 抓响应体：宿主用 res.end(payload) 写 JSON，这里抄一份用于判定 ok（不改变任何写出行为）
-    res.end = ((chunk?: unknown, ...rest: unknown[]) => {
-      if (typeof chunk === 'string') captured = chunk;
-      return (originalEnd as (...args: unknown[]) => unknown)(chunk, ...rest);
-    }) as typeof res.end;
-    return Promise.resolve(original(req, res)).finally(() => {
-      let ok = false;
-      let message: string | undefined;
-      try {
-        const body = JSON.parse(captured) as { ok?: boolean; message?: string };
-        ok = body.ok === true;
-        message = body.message;
-      } catch {
-        /* 非 JSON（异常分支）：按失败处理 */
-      }
-      emitTurnEnd(ok, message);
-    });
-  };
-}
-
-/**
  * 首次运行标记文件。
  *
  * 为什么不用"配置文件是否存在"判断：**首次启动并不会写 main-config.jsonc**（只有用户在设置页
@@ -452,7 +393,6 @@ async function bootstrap(): Promise<void> {
 
   // 插件宿主半边：路由表、配置合并、状态仓、桌面窗口（含守护循环）全在这一句里
   apply(context.ctx);
-  wrapChatRoute();
   appendLog(`[host] apply done, routes=${routes.length}`);
 
   stopNotify = startNotifyWatcher({

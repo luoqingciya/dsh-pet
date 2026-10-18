@@ -78,6 +78,19 @@ export function createAppContext(options: AppContextOptions): AppContext {
   const portOf = (): number => (typeof options.port === 'function' ? options.port() : options.port);
 
   const secretsOf = (): SecretMap => (options.secrets ? options.secrets() : readSecrets());
+
+  /** 把事件投给所有监听器（ctx.emit 与返回的 emit 共用这一份，宿主可以自己投回总线） */
+  const emit = (name: string, ...args: unknown[]): void => {
+    const set = listeners.get(name);
+    if (!set) return;
+    for (const handler of [...set]) {
+      try {
+        handler(...args);
+      } catch (error) {
+        logger.warn(`事件处理失败（${name}）：${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+  };
   const configOf = (): AppConfig => options.config();
 
   const llm: LlmService = createLlmService({ config: configOf, secrets: secretsOf });
@@ -124,6 +137,12 @@ export function createAppContext(options: AppContextOptions): AppContext {
 
     logger,
     webServer,
+    /**
+     * 事件总线出口：宿主把**自己合成的**会话事件投回来（例如一次对话的 turn/start、turn/end）。
+     * 应用里没有真实会话，工作状态联动与通知帧都靠这些事件驱动；宿主是唯一的产生者，
+     * 因为只有它知道生成什么时候开始、结果是什么。
+     */
+    emit,
 
     agentDefaultModel: {
       currentSelection: (): { provider: string; model: string } => {
@@ -158,17 +177,7 @@ export function createAppContext(options: AppContextOptions): AppContext {
     ctx: context,
     routes,
     failures,
-    emit(name: string, ...args: unknown[]): void {
-      const set = listeners.get(name);
-      if (!set) return;
-      for (const handler of [...set]) {
-        try {
-          handler(...args);
-        } catch (error) {
-          logger.warn(`事件处理失败（${name}）：${error instanceof Error ? error.message : String(error)}`);
-        }
-      }
-    },
+    emit,
     async dispose(): Promise<void> {
       if (disposed) return;
       disposed = true;

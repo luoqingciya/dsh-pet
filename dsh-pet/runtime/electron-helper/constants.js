@@ -28,8 +28,8 @@ function toScreen(v) {
 function toLocal(v) {
   return v / CONFIG.scale;
 }
-// bridge 模式（DSH_PET_BRIDGE=1）：请求走自定义 scheme，经 Electron 主进程转宿主管道——
-// 绕开 DSH Desktop 2.0.3+ 的浏览器访问闸门（只放行带令牌的请求，插件自拉进程的裸 HTTP 全 403）
+// bridge 模式（主进程在建窗时写进 query 的 bridge=1）：请求走自定义 scheme，由主进程的
+// protocol.handle 直接调宿主路由。页面是 file:// 源，直连 HTTP 会撞 CORS 与私有网络访问限制。
 const BRIDGE = params.get('bridge') === '1';
 // 视口 = 全部显示器工作区的外接矩形（多显示器时即整个桌面；窗口只是宠物的一块局部画布）。
 // 它只是**坐标系原点与比例换算基准**：位置比例（customPos）、漫游 ratio 都按它算。

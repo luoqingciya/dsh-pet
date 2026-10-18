@@ -103,6 +103,34 @@ test('desktop window: 渲染端拿到配置、画出宠物、视频真的在播'
         '宠物动画必须在播放（不是暂停态）',
       );
     });
+    // 回归：对话状态联动 / 通知必须对**桌面宠物自己发起的对话**生效。
+    // 从前 turn 事件包在 HTTP 路由外面，bridge 这条路上什么都不发生（用户点宠物聊天时
+    // 设置里的「对话状态联动」看起来还在、实际永远不切动画）。
+    await t.test('桌面宠物自己发起对话也会产生状态与通知', async () => {
+      const origin = await petPage.evaluate(() => new URL(CONFIG.configUrl).origin);
+      const readState = async () => (await fetch(origin + '/dsh-pet-7340/state')).json();
+      const before = await readState();
+      const notifyBefore = before?.sections?.notify?.counter ?? 0;
+
+      // 走渲染端同一条通道（bridge scheme）。临时 profile 里没有 API Key → 必然失败，
+      // 但 turn/start、turn/end 与成败无关：状态必须切到 error，通知帧必须产生。
+      const status = await petPage.evaluate(() =>
+        fetch('dsh-pet-bridge://dsh-pet/dsh-pet-7340/chat?pet=main', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ text: '你好' }),
+        }).then((r) => r.status),
+      );
+      assert.equal(status, 200, '对话请求应被受理（成败由响应体的 ok 表达）');
+
+      const changed = await waitFor(async () => {
+        const now = await readState();
+        return Boolean(now?.sections?.workStatus?.data?.state) && (now?.sections?.notify?.counter ?? 0) > notifyBefore;
+      }, 15000);
+      const after = await readState();
+      assert.ok(changed, '桌面宠物聊天必须触发对话状态联动与通知帧');
+      assert.equal(after.sections.workStatus.data.state, 'error', '没有 API Key → 状态应为 error');
+    });
   } finally {
     await app.close().catch(() => {});
   }
