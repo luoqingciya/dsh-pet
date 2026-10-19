@@ -11,7 +11,9 @@
  *   6. 插件时代的字段必须已经清干净（dsh / peerDependencies / icon），否则会误导安装方式；
  *   7. 产物里不得出现 `@deepseek-ai/*`——项目已脱离 DSH，源码里若有人再 import，构建期会被
  *      当成 external 留下裸 require（启动即崩），这里提前拦住；
- *   8. `package.json` 与 `package-lock.json` 的版本号必须一致（0.9.0 之前 lock 停在 0.4.0 跨了五个版本）。
+ *   8. `package.json` 与 `package-lock.json` 的版本号必须一致（0.9.0 之前 lock 停在 0.4.0 跨了五个版本）；
+ *   9. 桌面页面的 `<script src>` 都能解析（产物挪目录时最容易漏）；
+ *  10. **两条打包路径打同一份文件**（免安装 zip 的 APP_DIRS 与 electron-builder.yml 的 files）。
  *
  * 用法：node scripts/prepack-check.js
  */
@@ -239,5 +241,83 @@ for (const html of ['index.html', 'tray-menu.html']) {
 }
 if (brokenScripts.length > 0) fail(`桌面页面的 script 解析不到：${brokenScripts.join('、')}`);
 else ok('桌面页面的 script 路径均可解析');
+
+// ---- 10. 两条打包路径必须打同一份文件 ----
+// 事故（1.0.1 实际翻车）：B2 把窗口层从 runtime/ 搬到 src/desktop/，package-app.mjs 的
+// APP_DIRS 跟着改了，但 electron-builder.yml 的 files 列表没改 —— 免安装 zip 正常，
+// **安装版启动即崩**：Cannot find module <安装目录>/resources/app/src/desktop/windows.js。
+// CI 只构建安装包、从不运行它（ui 用例跑的是源码态），所以一路绿到用户装上才暴露。
+// 这里把两份手写清单做集合比对：少一项就红，且直接指出是哪一边缺。
+function readPackagedDirs() {
+  // package-app.mjs 的 APP_DIRS / APP_FILES（正则取值，不 import——那脚本顶层就会执行）
+  const src = readFileSync(join(ROOT, 'scripts', 'package-app.mjs'), 'utf8');
+  const grab = (name) => {
+    const m = src.match(new RegExp(`const ${name} = \\[([\\s\\S]*?)\\];`));
+    if (!m) return null;
+    const out = [];
+    for (const line of m[1].split('\n')) {
+      // 一行里可能有多个：join('assets', 'config.jsonc'), join('assets', 'logo.png')
+      const joins = [...line.matchAll(/join\(([^)]*)\)/g)];
+      if (joins.length > 0) {
+        for (const j of joins) {
+          const parts = [...j[1].matchAll(/'([^']+)'/g)].map((x) => x[1]);
+          if (parts.length) out.push(parts.join('/'));
+        }
+        continue;
+      }
+      const plain = line.match(/'([^']+)'/);
+      if (plain) out.push(plain[1]);
+    }
+    return out;
+  };
+  const dirs = grab('APP_DIRS');
+  const files = grab('APP_FILES');
+  if (!dirs || !files) return null;
+  return new Set([...dirs, ...files]);
+}
+
+function readBuilderDirs() {
+  // 逐行解析：files: 之后、第一个不缩进的行之前，都是这个列表（中间允许注释与空行）
+  const lines = readFileSync(join(ROOT, 'electron-builder.yml'), 'utf8').split('\n');
+  const start = lines.findIndex((l) => /^files:\s*$/.test(l));
+  if (start < 0) return null;
+  const out = new Set();
+  for (let i = start + 1; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (!/^[ \t]/.test(line)) break; // 回到顶层键，列表结束
+    const m = line.match(/^[ \t]*-\s*(.+)$/);
+    if (!m) continue; // 注释行 / 空行
+    const entry = m[1]
+      .replace(/\s+#.*$/, '')
+      .trim()
+      .replace(/^'|'$/g, '');
+    if (!entry || entry.startsWith('!')) continue; // 排除规则（node_modules）不参与比对
+    // "lib/**/*" → "lib"；"assets/config.jsonc" 原样
+    out.add(entry.replace(/\/\*\*\/\*$/, ''));
+  }
+  return out;
+}
+
+const pkgDirs = readPackagedDirs();
+const builderDirs = readBuilderDirs();
+if (!pkgDirs || !builderDirs) {
+  fail('读不到打包清单（package-app.mjs 的 APP_DIRS/APP_FILES 或 electron-builder.yml 的 files）');
+} else {
+  // package.json 由 electron-builder 隐式包含，不必出现在 APP_DIRS 里
+  builderDirs.delete('package.json');
+  const missingInBuilder = [...pkgDirs].filter((d) => !builderDirs.has(d));
+  const missingInPkg = [...builderDirs].filter((d) => !pkgDirs.has(d));
+  if (missingInBuilder.length || missingInPkg.length) {
+    const detail = [
+      missingInBuilder.length ? `electron-builder.yml 缺：${missingInBuilder.join('、')}` : '',
+      missingInPkg.length ? `package-app.mjs 缺：${missingInPkg.join('、')}` : '',
+    ]
+      .filter(Boolean)
+      .join('；');
+    fail(`两条打包路径的文件清单不一致（${detail}）—— 装出来的应用会缺文件`);
+  } else {
+    ok(`两条打包路径一致：${[...pkgDirs].join('、')}`);
+  }
+}
 
 console.log(process.exitCode ? '[prepack-check] 未通过' : '[prepack-check] 全部通过');

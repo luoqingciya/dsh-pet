@@ -364,6 +364,7 @@ npm run app             # 构建并启动
 npm run app:package     # 免安装 zip 的内容目录：dist/dsh-pet-ng-app/
 npm run app:installer   # Windows 安装包（NSIS）：dist/installer/dsh-pet-ng-<版本>-win-x64-setup.exe
 npm run app:smoke       # 端到端冒烟（需要应用已在运行）
+npm run package:smoke   # 打包产物**启动**冒烟（先跑 app:installer / app:package，真的把产物拉起来等 /health）
 npm test                # 单元测试（纯逻辑 + 源码守卫）
 npm run test:ui         # 真机 UI 回归（需 DSH_PET_ELECTRON 指向一份 Electron）
 ```

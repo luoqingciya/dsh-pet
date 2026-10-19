@@ -103,6 +103,19 @@ jobs:
           # Runner 在 GitHub 网络内，直接走官方源（脚本默认的 npmmirror 是给国内本地构建用的）
           ELECTRON_BUILDER_BINARIES_MIRROR: https://github.com/electron-userland/electron-builder-binaries/releases/download/
         run: npm run app:installer
+      # **打包产物必须真的能启动**。
+      #
+      # 1.0.1 就是漏了这一步发出去的：electron-builder.yml 的 files 列表还停在 B2 重构前
+      # （有 runtime/、没有 src/desktop/），安装版启动即崩
+      # `Cannot find module .../resources/app/src/desktop/windows.js`，而免安装 zip 完全正常。
+      # 上面那些 job 只**构建**不**运行**（ui 跑的是源码态），所以一路绿到用户装上才暴露。
+      # 这里把两种产物都真的拉起来，等 /health 返回 200。
+      - name: Smoke installer output (Windows only)
+        if: runner.os == 'Windows'
+        run: node scripts/package-smoke.mjs --dir dist/installer/win-unpacked
+      - name: Smoke portable output (Windows only)
+        if: runner.os == 'Windows'
+        run: node scripts/package-smoke.mjs --dir dist/dsh-pet-ng-app --port 7398
       # 两个平台都打成「一个 dsh-petNG/ 目录」：Windows 的 Compress-Archive 传 `*` 会把 20 个文件
       # 摊在压缩包根目录，解压后散一地；和 mac/linux 的包结构也不一致。
       #

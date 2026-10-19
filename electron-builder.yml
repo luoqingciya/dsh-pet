@@ -29,12 +29,20 @@ electronLanguages:
   - zh-CN
   - en-US
 
-# 只打运行必需的文件（与 package.json 的 files 口径一致）
+# 只打运行必需的文件（与 scripts/package-app.mjs 的 APP_DIRS/APP_FILES **必须一致**）
 # node_modules 明确排除：主进程与设置页都已被打包成单文件，运行时不需要任何 npm 依赖
 # （启动器才需要 @electron/get，而安装版根本不经过启动器）。
+#
+# ⚠️ 这份清单与 package-app.mjs 是**两份手写清单**，很容易漂移：
+# 1.0.1 就是这样发出去的——B2 把窗口层从 runtime/ 搬到 src/desktop/，package-app.mjs 跟着改了，
+# 这里没改 → 免安装 zip 正常、**安装版启动即崩**（Cannot find module .../src/desktop/windows.js）。
+# 现在 prepack-check 第 10 项会比对两份清单，漂移直接判红。
 files:
   - lib/**/*
-  - runtime/**/*
+  # 窗口层按**文件路径** require（见上面 asar: false 的说明）：src/desktop/windows.js + 它
+  # 同目录的 pointer-target / topmost-watchdog / dpi-linearization / desktop-geometry / preload，
+  # 以及两个页面（index.html / tray-menu.html）
+  - src/desktop/**/*
   - assets/webm/**/*
   - assets/fonts/**/*
   - assets/pic/**/*
