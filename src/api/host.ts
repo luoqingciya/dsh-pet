@@ -46,18 +46,14 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveDshHome } from '../core/standalone/home-paths';
-import { credentialRef } from '../core/standalone/credentials';
-import { queryBalance } from '../core/balance/index';
 import { generateWhisper } from '../core/whisper';
 import { generateChat } from '../core/chat';
-import { configuredModel } from '../core/model-selection';
-import { limitPool, pickMeme, readMemePool } from '../core/memes';
 import {
-  findPetInstance,
+  balancePeriodSec,
   flattenPetList,
   migrateUserConfig,
   readAllConfig,
-  sliceMemoryRounds,
+  whisperPeriodSec,
   type ConfigPaths,
 } from '../core/config';
 import { currentTaskFromTodo, reduceWorkStatus } from '../core/work-status';
@@ -72,10 +68,11 @@ import { createAssetPaths } from '../core/assets';
 import { createMemoryStore } from '../core/memory-store';
 import { createWorkStatusPublisher } from '../core/work-status-publisher';
 import { createDesktopControl } from '../core/desktop-control';
+import { createPetServices } from '../core/pet-services';
+import { createBalanceService } from '../core/balance-service';
 import { createNotifyPipeline, type Waterfall } from '../core/notify-pipeline';
 import { PollStateStore } from '../core/state';
 import { readBody, sendFile, sendJson, sendText } from '../core/http';
-import { petSystemPrompt, withTimeContext } from '../core/prompt';
 import type { DesktopRequest, DesktopResponse, PetDesktop } from '../core/desktop-api';
 import { createPetRouter } from './router';
 
@@ -164,163 +161,31 @@ export function apply(ctx: any): void {
   // 对话记忆：读写 / 串行锁 / 轮数全部收在 core/memory-store（唯一读写方是本进程）
   const memory = createMemoryStore({ rootDir: userRoot });
 
-  /** 生成/返回某宠物的一句碎碎念（周期 GET 与菜单手动触发共用的同一逻辑）：
-   *  每只宠物独立生成（所属条目的人设）。生成成功就写进 S 的 pets.<id>.say——
-   *  碎碎念 / 命令气泡 / 对话回复在前端本来就是**同一条展示链路**（同一个 triggerWhisper、
-   *  同一个气泡槽、同一批 events.whisper 动画），所以合并成同一个叶子；"周期内不重复"由
-   *  调度侧的 lastWhisperAt 保证，不再需要一份 whisperCache（多端共享也由 S 天然保证）。
-   *  配图（whisperImageEnabled 开启时）：从表情包池**随机抽 1 张**，把描述注入指令并随文本一起写。 */
-  const publishWhisper = async (petId: string): Promise<boolean> => {
-    const cfg = readAllConfig(configPaths);
-    const found = findPetInstance(cfg, petId);
-    const conf = found ? found.conf : (cfg.main ?? {});
-    const entry = found ? found.entry : 'main';
-    const system = petSystemPrompt(petId, cfg);
-    // 配图：全局开关关闭 / 池为空 / 池内图片全缺失 → 纯文本（不报错，退化为原行为）
-    const meme = conf.whisperImageEnabled === true ? pickMeme(readMemePool(conf.memes, memeDirsFor(entry))) : undefined;
-    // 模型：条目配置的 whisperModel 优先（留空 = 不指定）；生成侧失败会回落到本地服务配置的模型重试一次
-    // now：时间背景由 whisper 侧拼到最后一条 user 消息（不进 system——那是缓存前缀，见 ./prompt）
-    const result = await generateWhisper(ctx, system, meme, configuredModel(conf, 'whisperModel'), new Date());
-    if (!result.ok) {
-      // 失败**不写 S**（与改造前一致：静默跳过 + console.warn，不伪造文案、不弹错误气泡）
-      console.warn(
-        '[dsh-petNG] 碎碎念生成失败 pet=' +
-          petId +
-          ' reason=' +
-          result.reason +
-          (result.message ? ' ' + result.message : ''),
-      );
-      return false;
-    }
-    state.writePet(petId, 'say', result.image ? { text: result.text, image: result.image } : { text: result.text });
-    return true;
-  };
+  // 碎碎念与对话：前处理（人设/配图/模型）与落点（S 的 pets.<id>.say）完全一致，
+  // 收在 core/pet-services；生成能力在这里绑定 ctx 后注入，core 不认识 ctx。
+  const petServices = createPetServices({
+    configPaths,
+    state,
+    memory,
+    memeDirsFor,
+    whisper: (system, meme, model, now) => generateWhisper(ctx, system, meme, model, now),
+    chat: (system, list, text, pool, model) => generateChat(ctx, system, list, text, pool, model),
+  });
+  const publishWhisper = petServices.publishWhisper;
+  const chatWithPet = petServices.chatWithPet;
 
-  /** 与某只宠物对话：截取最近记忆 → 生成回复 → 写入记忆 → 把回复写进 S 的 pets.<id>.say。
-   *  供 POST /chat（动作端点）与 /chat 命令共用同一条路径（锁内读写，防并发交错写盘）。
-   *  配图（chatImageEnabled 开启时）：把表情包清单交给模型按语境选一张，命中池内才随回复写回。 */
-  const chatWithPet = async (
-    petId: string,
-    text: string,
-  ): Promise<{ ok: true } | { ok: false; reason: 'provider-missing' | 'generate-error'; message?: string }> =>
-    memory.withLock(async () => {
-      const cfg = readAllConfig(configPaths);
-      const rounds = memory.roundsFor(petId, cfg);
-      const found = findPetInstance(cfg, petId);
-      const conf = (found ?? { conf: cfg.main ?? {} }).conf;
-      // 人设：所属条目的 whisperPrompt（合并器已填默认）+ 名字声明（与碎碎念同一拼装）
-      const system = petSystemPrompt(petId, cfg);
-      // 配图：开关关闭 → 空池（指令与解析都不介入，与旧行为逐字一致）；目录链按所属条目取。
-      // 张数上限（chatImageLimit，0 = 不限制）：整张清单每条消息都要附，截断后费用上限可控。
-      const pool =
-        conf.chatImageEnabled === true
-          ? limitPool(readMemePool(conf.memes, memeDirsFor(found?.entry ?? 'main')), Number(conf.chatImageLimit))
-          : [];
-      const mem = await memory.read();
-      const bucketKey = found?.entry ?? petId;
-      const bucket = (mem[bucketKey] ??= {});
-      const entry = (bucket[petId] ??= { messages: [] });
-      // rounds = 0（用户关掉历史）→ 空历史；否则截尾部 rounds 轮（1 轮 = 1 问 1 答）。
-      // 不能写 slice(-rounds * 2)：-0 在 JS 里 === 0，slice(-0) 返回整个数组而不是空。
-      const list = sliceMemoryRounds(entry.messages, rounds);
-      // 模型：条目配置的 chatModel 优先（留空 = 不指定）；生成侧失败会回落到本地服务配置的模型重试一次
-      // 时间背景只进**这一次请求**的 user 消息（不进 system、也不写进记忆）：system + 历史构成
-      // 的前缀因此逐字稳定，整段记忆都能命中 prompt cache——见 ./prompt 的头注释。
-      const generated = await generateChat(
-        ctx,
-        system,
-        list,
-        withTimeContext(text, new Date()),
-        pool,
-        configuredModel(conf, 'chatModel'),
-      );
-      if (!generated.ok) return generated;
-      const now = Date.now();
-      entry.messages.push({ role: 'user', content: text, ts: now });
-      // 记忆只存正文（配图属展示层，不进上下文——否则下次请求会把标记当历史读回去）
-      entry.messages.push({ role: 'assistant', content: generated.text, ts: now });
-      await memory.write(mem);
-      // 回复写进 S（与碎碎念同一个叶子：前端本来就是同一条展示链路）。
-      // `reply: true` 是给展示层的信号：这是**用户刚问的那句话的回答**，优先级高于
-      // 「终态任务」气泡（否则对话一结束，turn/end 的「这一轮搞定啦」会把回答整段盖掉，
-      // 用户只看到"任务结束"、看不到回答——只能再点一次对话翻历史）。
-      state.writePet(
-        petId,
-        'say',
-        generated.image
-          ? { text: generated.text, image: generated.image, reply: true }
-          : { text: generated.text, reply: true },
-      );
-      return { ok: true as const };
-    });
-
-  /**
-   * 当前生效宠物列表 = readAllConfig 成品拍平（main + 文件宠物全部条目；合并器已保证 id 唯一、
-   * 字段填满），命令与桌面模式都从这里取。
-   */
   const effectivePetList = (): Record<string, unknown>[] => flattenPetList(readAllConfig(configPaths));
 
   /** 余额刷新周期（秒）：成品 main 条目的 eventsRefreshSec.balance（合并器已填默认；非法兜底 1800） */
-  const balancePeriodSec = (cfg: Record<string, Record<string, unknown>>): number => {
-    const ers = cfg.main?.eventsRefreshSec as Record<string, unknown> | undefined;
-    const n = Number(ers?.balance);
-    return Number.isFinite(n) && n > 0 ? n : 1800;
-  };
+  // 余额：宿主侧唯一的查询点，实现在 core/balance-service（服务商与凭证由这里绑定 ctx 后注入）
+  const balance = createBalanceService({
+    state,
+    currentProvider: () => ctx.agentDefaultModel.currentSelection().provider,
+    balanceProvider: (ctx as { petBalanceProvider?: () => string }).petBalanceProvider,
+    resolveCredential: async (ref) => (await ctx.credentials.resolve(ref))?.value,
+  });
+  const refreshBalance = balance.refresh;
 
-  /** 碎碎念周期（秒）：该宠物**所属条目**的 eventsRefreshSec.whisper（合并器已填默认；非法兜底 300） */
-  const whisperPeriodSec = (cfg: Record<string, Record<string, unknown>>, petId: string): number => {
-    const conf = (findPetInstance(cfg, petId) ?? { conf: cfg.main ?? {} }).conf;
-    const ers = conf.eventsRefreshSec as Record<string, unknown> | undefined;
-    const n = Number(ers?.whisper);
-    return Number.isFinite(n) && n > 0 ? n : 300;
-  };
-
-  /**
-   * 刷新余额并写入 S —— host 侧**唯一**的余额查询点。
-   *
-   * 改造前是每个客户端各自按自己的定时器去查（每个窗口一个）：同一份外部 API
-   * 被重复请求、不同窗口还可能看到新旧不一致的数据。现在只有这里查，所有窗口都从 /state 读同一份结果。
-   *
-   * 失败也写进 S（reason 区分 unsupported / credential-missing / fetch-error）——余额不可用要弹
-   * 文字说明气泡，不能静默；意外异常同样落成 fetch-error，不吞。
-   *
-   * @param manual 这次刷新是不是"用户要的"（/balance 命令、桌面「查看余额」菜单）。
-   *   标记随数据一起写进叶子：只有 host 知道是谁要的，前端据此决定余额不可用时要不要**必弹**
-   *   文字说明（decideBalanceNotice 的 explicit；周期刷新则只在原因变化时弹一次，免得反复刷屏）。
-   */
-  const refreshBalance = async (manual = false): Promise<void> => {
-    const mark = <T>(v: T): T | (T & { manual: true }) => (manual ? { ...v, manual: true } : v);
-    try {
-      const sel = ctx.agentDefaultModel.currentSelection();
-      // 余额服务商：默认跟随当前对话的模型（DSH 内行为不变）。本地应用（无 DSH）允许
-      // 「对话用 A、余额查 B」——宿主若提供 petBalanceProvider 能力就优先用它，空串回落 sel.provider。
-      const petBalanceProvider = (ctx as { petBalanceProvider?: () => unknown }).petBalanceProvider;
-      const balanceProviderId =
-        typeof petBalanceProvider === 'function' ? String(petBalanceProvider() || sel.provider) : sel.provider;
-      const result = await queryBalance(balanceProviderId, async (ref) => {
-        const rc = await ctx.credentials.resolve(credentialRef(ref));
-        return rc?.value;
-      });
-      state.writeSection('balance', mark(result));
-    } catch (e) {
-      state.writeSection(
-        'balance',
-        mark({
-          ok: false,
-          provider: 'unknown',
-          reason: 'fetch-error',
-          message: e instanceof Error ? e.message : String(e),
-        }),
-      );
-    }
-  };
-
-  /**
-   * 「默认宠物」= 有效宠物列表的第一只。
-   *
-   * 从前这里还有"用户在 /pet 里选过哪只"的进程内状态；斜杠命令删掉后没有"当前桌宠"这个概念了，
-   * 动作端点一律用查询参数 `pet=<id>` 指定目标，缺省就落到第一只。
-   */
   const resolveActivePetId = (): string => {
     try {
       const eff = effectivePetList();

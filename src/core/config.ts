@@ -819,3 +819,22 @@ export function syncUserConfigFromDefault(paths: ConfigPaths): void {
 export function sliceMemoryRounds<T>(messages: T[], rounds: number): T[] {
   return rounds > 0 ? messages.slice(-Math.floor(rounds) * 2) : [];
 }
+
+/**
+ * 余额刷新周期（秒）：成品 main 条目的 `eventsRefreshSec.balance`（合并器已填默认；非法兜底 1800）。
+ */
+export function balancePeriodSec(cfg: Record<string, Record<string, unknown>>): number {
+  const ers = cfg.main?.eventsRefreshSec as Record<string, unknown> | undefined;
+  const n = Number(ers?.balance);
+  return Number.isFinite(n) && n > 0 ? n : 1800;
+}
+
+/**
+ * 碎碎念周期（秒）：该宠物**所属条目**的 `eventsRefreshSec.whisper`（合并器已填默认；非法兜底 300）。
+ */
+export function whisperPeriodSec(cfg: Record<string, Record<string, unknown>>, petId: string): number {
+  const conf = (findPetInstance(cfg, petId) ?? { conf: cfg.main ?? {} }).conf;
+  const ers = conf.eventsRefreshSec as Record<string, unknown> | undefined;
+  const n = Number(ers?.whisper);
+  return Number.isFinite(n) && n > 0 ? n : 300;
+}
