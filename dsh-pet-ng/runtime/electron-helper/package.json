@@ -1,0 +1,7 @@
+{
+  "name": "dsh-pet-ng-electron-helper",
+  "version": "0.1.0",
+  "private": true,
+  "description": "dsh-petNG desktop window layer — transparent overlay windows",
+  "main": "windows.js"
+}

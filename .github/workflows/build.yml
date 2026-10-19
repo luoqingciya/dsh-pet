@@ -12,7 +12,7 @@ permissions:
 
 defaults:
   run:
-    working-directory: dsh-pet
+    working-directory: dsh-pet-ng
 
 jobs:
   # 质量门禁：类型、规范、单测、产物结构、接口文档对齐
@@ -24,7 +24,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: dsh-pet/package-lock.json
+          cache-dependency-path: dsh-pet-ng/package-lock.json
       - run: npm ci
       - run: npm run build
       - run: npm run typecheck
@@ -46,7 +46,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: dsh-pet/package-lock.json
+          cache-dependency-path: dsh-pet-ng/package-lock.json
       - run: npm ci
       - run: npm run build
       # 与打包步骤同一条下载路径（@electron/get + SHA256 校验）；下完 test:ui 自己会找到它
@@ -76,10 +76,10 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: dsh-pet/package-lock.json
+          cache-dependency-path: dsh-pet-ng/package-lock.json
       - run: npm ci
       - run: npm run build
-      # 产物文件名带版本号（dsh-pet-<版本>-<平台>-<架构>.zip），方便归档与区分新旧包
+      # 产物文件名带版本号（dsh-pet-ng-<版本>-<平台>-<架构>.zip），方便归档与区分新旧包
       - name: Read version
         id: ver
         shell: bash
@@ -106,7 +106,7 @@ jobs:
           # Runner 在 GitHub 网络内，直接走官方源（脚本默认的 npmmirror 是给国内本地构建用的）
           ELECTRON_BUILDER_BINARIES_MIRROR: https://github.com/electron-userland/electron-builder-binaries/releases/download/
         run: npm run app:installer
-      # 两个平台都打成「一个 dsh-pet/ 目录」：Windows 的 Compress-Archive 传 `*` 会把 20 个文件
+      # 两个平台都打成「一个 dsh-pet-ng/ 目录」：Windows 的 Compress-Archive 传 `*` 会把 20 个文件
       # 摊在压缩包根目录，解压后散一地；和 mac/linux 的包结构也不一致。
       #
       # 用 **改名而不是复制**：macOS 的 Electron.app 里全是符号链接（Framework 的 Versions/Current
@@ -116,25 +116,25 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          Rename-Item -Path dist/dsh-pet-app -NewName dsh-pet
-          Compress-Archive -Path dist/dsh-pet -DestinationPath dist/dsh-pet-${{ steps.ver.outputs.v }}-${{ matrix.suffix }}.zip
+          Rename-Item -Path dist/dsh-pet-ng-app -NewName dsh-petNG
+          Compress-Archive -Path dist/dsh-petNG -DestinationPath dist/dsh-pet-ng-${{ steps.ver.outputs.v }}-${{ matrix.suffix }}.zip
       - name: Archive (macOS / Linux)
         if: runner.os != 'Windows'
         run: |
           cd dist
-          mv dsh-pet-app dsh-pet
-          zip -qry dsh-pet-${{ steps.ver.outputs.v }}-${{ matrix.suffix }}.zip dsh-pet
+          mv dsh-pet-ng-app dsh-petNG
+          zip -qry dsh-pet-ng-${{ steps.ver.outputs.v }}-${{ matrix.suffix }}.zip dsh-petNG
       - uses: actions/upload-artifact@v4
         with:
-          name: dsh-pet-${{ matrix.suffix }}
-          path: dsh-pet/dist/dsh-pet-*.zip
+          name: dsh-pet-ng-${{ matrix.suffix }}
+          path: dsh-pet-ng/dist/dsh-pet-ng-*.zip
           if-no-files-found: error
           retention-days: 14
       - uses: actions/upload-artifact@v4
         if: runner.os == 'Windows'
         with:
-          name: dsh-pet-installer
-          path: dsh-pet/dist/installer/*.exe
+          name: dsh-pet-ng-installer
+          path: dsh-pet-ng/dist/installer/*.exe
           if-no-files-found: error
           retention-days: 14
 
@@ -153,7 +153,7 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/dsh-pet-*.zip
+            dist/dsh-pet-ng-*.zip
             dist/*.exe
           generate_release_notes: true
           draft: false

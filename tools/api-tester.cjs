@@ -1,5 +1,5 @@
 /**
- * dsh-pet HTTP 接口测试页的本地代理。
+ * dsh-petNG HTTP 接口测试页的本地代理。
  *
  * 为什么需要它：宿主路由（src/host/index.ts）**不返回 CORS 头**——浏览器半侧之所以能用，
  * 是因为设置页由应用自己的本地服务同源提供。测试页要么是 file://（Origin: null），
@@ -35,7 +35,7 @@ const NO_OPEN = argv.includes('--no-open');
 let hostPort = Number(argOf('--port', '7340'));
 
 /** 路由前缀：与 src/host/index.ts 的 ROUTE_PREFIX 一致（7340 是名字，不是端口） */
-const PREFIX = '/dsh-pet-7340';
+const PREFIX = '/dsh-pet-ng-7340';
 
 /** 这一跳要补的 CORS 头。注意：**只给本机测试代理补**，不改宿主行为。 */
 const CORS = {
@@ -89,7 +89,7 @@ function forward(req, res) {
 }
 
 /**
- * 代理自己的小端点（**不是** dsh-pet 接口，所以放在前缀之外）：
+ * 代理自己的小端点（**不是** dsh-petNG 接口，所以放在前缀之外）：
  *   GET  /__target        → { port }        页面启动时问"现在转发到哪个端口"
  *   POST /__target?port=N → { port }        页面改了端口输入框，切换转发目标
  * 这样测试页不用重新启动代理就能换端口试。
@@ -145,7 +145,7 @@ server.on('error', (err) => {
 server.listen(PROXY_PORT, '127.0.0.1', () => {
   const url = `http://127.0.0.1:${PROXY_PORT}/${PAGE}`;
   console.log('');
-  console.log('  dsh-pet 接口测试页');
+  console.log('  dsh-petNG 接口测试页');
   console.log('  ─────────────────────────────────────────────');
   console.log(`  测试页   ${url}`);
   console.log(`  转发到   http://127.0.0.1:${hostPort}${PREFIX}`);

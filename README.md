@@ -1,4 +1,4 @@
-# dsh-pet 🐾
+# dsh-petNG 🐾
 
 <p align="center">
   <img alt="platform" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-8A2BE2">
@@ -20,8 +20,8 @@
 
 ### 方式一：安装版（Windows）
 
-到 [Releases](https://github.com/luoqingciya/dsh-pet/releases) 下载 `dsh-pet-<版本>-win-x64-setup.exe`，
-双击安装。装到当前用户目录（`%LOCALAPPDATA%\Programs\dsh-pet`），不需要管理员权限，
+到 [Releases](https://github.com/luoqingciya/dsh-pet-ng/releases) 下载 `dsh-pet-ng-<版本>-win-x64-setup.exe`，
+双击安装。装到当前用户目录（`%LOCALAPPDATA%\Programs\dsh-petNG`），不需要管理员权限，
 开始菜单与桌面都有快捷方式。
 
 **数据就在安装目录下的 `data/`**：卸载时随程序一起删除，不往系统盘其它地方留东西。
@@ -32,13 +32,13 @@
 
 ### 方式二：免安装版（全平台）
 
-下载对应平台的压缩包（`dsh-pet-<版本>-<平台>-<架构>.zip`），解压到任意**可写**目录
-（包里是一个 `dsh-pet/` 文件夹，整个放过去即可）后：
+下载对应平台的压缩包（`dsh-pet-ng-<版本>-<平台>-<架构>.zip`），解压到任意**可写**目录
+（包里是一个 `dsh-pet-ng/` 文件夹，整个放过去即可）后：
 
-- Windows：双击 `dsh-pet.exe`
-- macOS：双击压缩包里的 `Electron.app`（包内可执行文件已改名为 `dsh-pet`；想让它显示成
-  `dsh-pet.app` 可以自己重命名整个 bundle）
-- Linux：运行 `./dsh-pet`
+- Windows：双击 `dsh-petNG.exe`
+- macOS：双击压缩包里的 `Electron.app`（包内可执行文件已改名为 `dsh-petNG`；想让它显示成
+  `dsh-petNG.app` 可以自己重命名整个 bundle）
+- Linux：运行 `./dsh-petNG`
 
 **数据就在解压目录下的 `data/`**：整个目录拷走即迁移，删掉即卸载干净。
 
@@ -51,27 +51,27 @@
 ### 方式三：从源码运行
 
 ```sh
-git clone git@github.com:luoqingciya/dsh-pet.git
-cd dsh-pet/dsh-pet
+git clone git@github.com:luoqingciya/dsh-petNG.git
+cd dsh-pet-ng/dsh-petNG
 npm install
 npm run app
 ```
 
 首次启动会自动下载一份 Electron 运行时（约 350MB，只下一次；打包版已自带，不需要下载），
-落在**本应用自己的缓存目录**：Windows `%LOCALAPPDATA%\dsh-pet\electron`、
-macOS `~/Library/Caches/dsh-pet/electron`、Linux `~/.cache/dsh-pet/electron`
+落在**本应用自己的缓存目录**：Windows `%LOCALAPPDATA%\dsh-petNG\electron`、
+macOS `~/Library/Caches/dsh-pet-ng/electron`、Linux `~/.cache/dsh-pet-ng/electron`
 （不再写进 `~/.dsh`——那是 DeepSeek Harness 的目录，本项目已经脱离它）。
 要换位置用 `DSH_PET_ELECTRON_DIR`，要复用已有的 Electron 用 `DSH_PET_ELECTRON_PATH`。
 `npm run app` 会先构建再启动，改完代码重跑即可。源码态的数据放在 Electron 的用户目录
-（`%APPDATA%\dsh-pet`），与打包版互不干扰。
+（`%APPDATA%\dsh-petNG`），与打包版互不干扰。
 
 ### 方式四：双击启动脚本
 
-Windows 直接双击仓库里的 `dsh-pet.cmd`；macOS / Linux 运行 `./dsh-pet.sh`。
+Windows 直接双击仓库里的 `dsh-pet-ng.cmd`；macOS / Linux 运行 `./dsh-pet-ng.sh`。
 首次会自动装依赖并构建。
 
 > **端口**：本地服务默认监听 `127.0.0.1:7340`（与 DeepSeek Harness 的 3080 错开）。
-> 被占用会自动顺延；要固定别的端口用 `dsh-pet --port <端口>` 或环境变量 `DSH_PET_APP_PORT`。
+> 被占用会自动顺延；要固定别的端口用 `dsh-petNG --port <端口>` 或环境变量 `DSH_PET_APP_PORT`。
 
 ---
 
@@ -92,7 +92,7 @@ Windows 直接双击仓库里的 `dsh-pet.cmd`；macOS / Linux 运行 `./dsh-pet
 - **状态灯**：回话时切「思考 → 成功 / 出错」；也能由任何脚本点亮——本机任务跑到哪一步，桌宠就演哪一档
 - **系统通知**：回话完成 / 生成失败、余额告急时弹原生通知
 - **开机自启**：设置页「启动」一勾即可（Windows 写 `HKCU\…\CurrentVersion\Run`、
-  macOS 走登录项、Linux 按 XDG 规范写 `~/.config/autostart/dsh-pet.desktop`）；
+  macOS 走登录项、Linux 按 XDG 规范写 `~/.config/autostart/dsh-petNG.desktop`）；
   状态以系统为准——在「任务管理器 → 启动」里禁掉后，设置页会如实显示为关
 - **更新提示**：启动后查一次新版本，有新版弹通知、点一下打开下载页（**只提示，不自动替换文件**）；
   托盘「检查更新」可随时手动查
@@ -125,7 +125,7 @@ Windows 直接双击仓库里的 `dsh-pet.cmd`；macOS / Linux 运行 `./dsh-pet
 | 余额服务商 | 默认跟随模型服务商，也可单独指定（对话走 Ollama、余额查 DeepSeek）                                                                               |
 | 通知       | 对话结果（完成或失败）/ 余额告急                                                                                                                 |
 | 更新       | 启动时检查新版本（可关）+ **「立即检查」按钮**（结果就地显示，有新版本给下载页链接）。只提示 + 打开下载页，不会自动下载或覆盖文件                |
-| 退出       | 设置页底部也有「退出 dsh-pet」（托盘菜单之外的第二条退出路径）                                                                                   |
+| 退出       | 设置页底部也有「退出 dsh-petNG」（托盘菜单之外的第二条退出路径）                                                                                   |
 
 点「测试连通」可直接验证端点 + 密钥 + 模型是否可用，失败会把服务端返回的原文带出来。
 
@@ -144,40 +144,40 @@ Windows 直接双击仓库里的 `dsh-pet.cmd`；macOS / Linux 运行 `./dsh-pet
 **待机 / 移动**
 
 <p>
-  <img src="dsh-pet/assets/preview/daiji-huxi-xiuxian.gif" width="150" alt="待机呼吸">
-  <img src="dsh-pet/assets/preview/dongzhangxiwang.gif" width="150" alt="东张西望">
-  <img src="dsh-pet/assets/preview/pangxie-zoulu.gif" width="150" alt="螃蟹走路">
+  <img src="dsh-pet-ng/assets/preview/daiji-huxi-xiuxian.gif" width="150" alt="待机呼吸">
+  <img src="dsh-pet-ng/assets/preview/dongzhangxiwang.gif" width="150" alt="东张西望">
+  <img src="dsh-pet-ng/assets/preview/pangxie-zoulu.gif" width="150" alt="螃蟹走路">
 </p>
 
 **小动作 / 玩耍**
 
 <p>
-  <img src="dsh-pet/assets/preview/chaoda-shenlanyao.gif" width="150" alt="超大伸懒腰">
-  <img src="dsh-pet/assets/preview/xie-daima.gif" width="150" alt="写代码">
-  <img src="dsh-pet/assets/preview/yuandi-zhuanxin-wan-mofang.gif" width="150" alt="玩魔方">
-  <img src="dsh-pet/assets/preview/lu-mao.gif" width="150" alt="撸猫">
+  <img src="dsh-pet-ng/assets/preview/chaoda-shenlanyao.gif" width="150" alt="超大伸懒腰">
+  <img src="dsh-pet-ng/assets/preview/xie-daima.gif" width="150" alt="写代码">
+  <img src="dsh-pet-ng/assets/preview/yuandi-zhuanxin-wan-mofang.gif" width="150" alt="玩魔方">
+  <img src="dsh-pet-ng/assets/preview/lu-mao.gif" width="150" alt="撸猫">
 </p>
 
 **吃什么 / 时节**
 
 <p>
-  <img src="dsh-pet/assets/preview/shuan-huoguo.gif" width="150" alt="涮火锅">
-  <img src="dsh-pet/assets/preview/chi-token.gif" width="150" alt="吃 Token">
-  <img src="dsh-pet/assets/preview/duixueren.gif" width="150" alt="堆雪人">
-  <img src="dsh-pet/assets/preview/fang-yanhua.gif" width="150" alt="放烟花">
+  <img src="dsh-pet-ng/assets/preview/shuan-huoguo.gif" width="150" alt="涮火锅">
+  <img src="dsh-pet-ng/assets/preview/chi-token.gif" width="150" alt="吃 Token">
+  <img src="dsh-pet-ng/assets/preview/duixueren.gif" width="150" alt="堆雪人">
+  <img src="dsh-pet-ng/assets/preview/fang-yanhua.gif" width="150" alt="放烟花">
 </p>
 
 **交互与状态**
 
 <p>
-  <img src="dsh-pet/assets/preview/dianji-huiying-kaixin-yuedong.gif" width="150" alt="点击回应">
-  <img src="dsh-pet/assets/preview/beishubiao-tuozhuai-xuankong-fankui.gif" width="150" alt="拖拽悬空">
-  <img src="dsh-pet/assets/preview/qian-dai-man-yi.gif" width="150" alt="余额-钱袋满溢">
-  <img src="dsh-pet/assets/preview/suisuinian-fadai-suisuinian.gif" width="150" alt="碎碎念">
-  <img src="dsh-pet/assets/preview/gongzuozhuangtai-sikao-maopao.gif" width="150" alt="工作状态-思考">
+  <img src="dsh-pet-ng/assets/preview/dianji-huiying-kaixin-yuedong.gif" width="150" alt="点击回应">
+  <img src="dsh-pet-ng/assets/preview/beishubiao-tuozhuai-xuankong-fankui.gif" width="150" alt="拖拽悬空">
+  <img src="dsh-pet-ng/assets/preview/qian-dai-man-yi.gif" width="150" alt="余额-钱袋满溢">
+  <img src="dsh-pet-ng/assets/preview/suisuinian-fadai-suisuinian.gif" width="150" alt="碎碎念">
+  <img src="dsh-pet-ng/assets/preview/gongzuozhuangtai-sikao-maopao.gif" width="150" alt="工作状态-思考">
 </p>
 
-全部 106 段动画见 `dsh-pet/assets/preview/`（GIF 仅作展示；实际播放用同名的透明 webm）。
+全部 106 段动画见 `dsh-pet-ng/assets/preview/`（GIF 仅作展示；实际播放用同名的透明 webm）。
 
 ---
 
@@ -191,7 +191,7 @@ Windows 直接双击仓库里的 `dsh-pet.cmd`；macOS / Linux 运行 `./dsh-pet
 ### 加宠物种类（pet pack）
 
 ```
-<数据目录>/dsh-pet/pet/
+<数据目录>/dsh-pet-ng/pet/
 ├─ pig-config.json      ← 与主配置同构；**只写要覆盖的顶层字段**，没写的取内置默认
 └─ pig-animation/       ← 这个种类自己的素材，平铺放 .webm
 ```
@@ -206,7 +206,7 @@ Windows 直接双击仓库里的 `dsh-pet.cmd`；macOS / Linux 运行 `./dsh-pet
 
 ## 对外 HTTP 接口
 
-桌宠不只是个摆设：它把全部能力挂在 `http://127.0.0.1:7340/dsh-pet-7340`（只监听本机、无鉴权），
+桌宠不只是个摆设：它把全部能力挂在 `http://127.0.0.1:7340/dsh-pet-ng-7340`（只监听本机、无鉴权），
 别的脚本可以让它说话、点播动画、读它的状态。
 
 - 一览：[`API.md`](API.md)
@@ -224,7 +224,7 @@ node tools/pet-status.mjs success              # 切「成功」
 node tools/pet-status.mjs clear                # 熄灭，回到空闲
 
 # 或者直接用接口（不依赖仓库里的脚本）
-curl -s -X POST http://127.0.0.1:7340/dsh-pet-7340/work-status \
+curl -s -X POST http://127.0.0.1:7340/dsh-pet-ng-7340/work-status \
      -H 'content-type: application/json' \
      -d '{"state":"waiting","text":"等你确认一下"}'
 ```
@@ -237,16 +237,16 @@ curl -s -X POST http://127.0.0.1:7340/dsh-pet-7340/work-status \
 ## 架构
 
 ```
-dsh-pet.exe（单个 Electron 进程）
+dsh-petNG.exe（单个 Electron 进程）
  ├─ 本地服务 127.0.0.1:7340
- │   ├─ /dsh-pet-7340/*   宿主半边：配置合并 / 状态仓 / 素材 / 余额 / 对话（src/host）
+ │   ├─ /dsh-pet-ng-7340/*   宿主半边：配置合并 / 状态仓 / 素材 / 余额 / 对话（src/host）
  │   └─ /app/*            设置页与本地服务接口（src/app/web-ui.ts）
  ├─ 宿主上下文（src/app/context.ts）
  │   ├─ credentials → secrets.json     ├─ llm → OpenAI 兼容端点
  │   └─ 事件总线（合成 turn/start、turn/end 驱动工作状态与通知）
  ├─ 托盘 / 设置窗口 / 原生通知
  └─ 桌面窗口层（src/app/desktop.ts + runtime/electron-helper/windows.js）
-     └─ 每只宠物一个透明置顶小窗；渲染端请求经 dsh-pet-bridge:// 直接调宿主路由
+     └─ 每只宠物一个透明置顶小窗；渲染端请求经 dsh-pet-ng-bridge:// 直接调宿主路由
 ```
 
 设计上有一条硬规则：**只有一份宠物业务**。路由、配置合并、动画池、物理、菜单、气泡全部在
@@ -257,7 +257,7 @@ dsh-pet.exe（单个 Electron 进程）
 `src/host/standalone/` 有一份本地实现。项目**不依赖任何 Agent 框架**，源码里也不出现
 DSH 的包名（`npm run prepack` 会扫描产物，混进 `@deepseek-ai/*` 直接判失败）。
 
-桌宠窗口与宿主在**同一个进程**里：渲染端的每个请求走 `dsh-pet-bridge://` scheme，
+桌宠窗口与宿主在**同一个进程**里：渲染端的每个请求走 `dsh-pet-ng-bridge://` scheme，
 `protocol.handle` 直接调宿主路由（同进程函数调用，不经网络、不经管道）。早先的版本把窗口层
 放在一个独立的 Electron 子进程里、用 stdout 管道通信——那套间接层已整体移除，
 省掉一整套常驻的 Electron 基础进程（实测 7 进程 / 575MB → 4 进程 / 约 350MB）。
@@ -270,14 +270,14 @@ DSH 的包名（`npm run prepack` 会扫描产物，混进 `@deepseek-ai/*` 直�
 
 | 形态              | 数据目录                                                              |
 | ----------------- | --------------------------------------------------------------------- |
-| 安装版（Windows） | `<安装目录>\data\`（默认 `%LOCALAPPDATA%\Programs\dsh-pet\data\`）    |
+| 安装版（Windows） | `<安装目录>\data\`（默认 `%LOCALAPPDATA%\Programs\dsh-petNG\data\`）    |
 | 免安装版          | `<解压目录>\data\`                                                    |
-| 源码运行          | `%APPDATA%\dsh-pet\`（macOS `~/Library/Application Support/dsh-pet`） |
+| 源码运行          | `%APPDATA%\dsh-petNG\`（macOS `~/Library/Application Support/dsh-petNG`） |
 
 ```
 <数据目录>/
 ├─ electron/           Electron 自己的缓存（Chromium profile，可随时删）
-└─ dsh-pet/
+└─ dsh-pet-ng/
    ├─ main-config.jsonc   桌宠配置（大小 / 位置 / 动画池 / 权重 / 物理 / 字体 / 人设）
    ├─ app-config.json     本地服务配置（服务商 / 模型 / 端点 / 通知开关）
    ├─ secrets.json        API Key（系统密钥加密）
@@ -291,7 +291,14 @@ DSH 的包名（`npm run prepack` 会扫描产物，混进 `@deepseek-ai/*` 直�
 免安装版请解压到**可写**目录（用户目录、D 盘任意文件夹都行）。若放在只读位置（如
 `Program Files`），应用会自动回落到用户目录启动，并在日志里说明。
 
-首次启动会自动接管 `~/.dsh/dsh-pet/`（旧版本的数据），只在新目录不存在时做一次。
+**改名说明（`dsh-pet` → `dsh-petNG`）**：产品改名后数据目录也跟着换了，首次启动会自动接管旧数据，
+按顺序取第一个存在的目录：
+
+1. 旧安装目录旁的 `data\dsh-pet\`（安装版从 0.9.x 升级）
+2. `%APPDATA%\dsh-pet\dsh-pet\`（0.9.x 源码运行）
+3. `~/.dsh/dsh-pet/`（更早的 DSH 插件时期）
+
+是**复制**不是移动：旧目录原样保留，不满意可以直接退回旧版。只在「新目录里还没有用户数据」时做一次。
 
 ---
 
@@ -303,10 +310,10 @@ DSH 的包名（`npm run prepack` 会扫描产物，混进 `@deepseek-ai/*` 直�
 | 碎碎念/对话报「缺少 API Key」         | 「本地服务」填对应密钥，或把服务商切到不需要密钥的本机 Ollama                                                                                                 |
 | 报「模型接口返回 HTTP 401」           | 密钥与端点不匹配（DeepSeek 的 key 不能用于自定义端点）                                                                                                        |
 | 余额只弹一句文字说明                  | 该服务商没有余额接口或缺密钥；气泡第二行会给出 provider id 与原因                                                                                             |
-| 端口 7340 被占用                      | 会自动顺延；要固定用 `dsh-pet --port 7500`（或 `npm run app -- --port 7500`），或设 `DSH_PET_APP_PORT=7500`                                                   |
+| 端口 7340 被占用                      | 会自动顺延；要固定用 `dsh-petNG --port 7500`（或 `npm run app -- --port 7500`），或设 `DSH_PET_APP_PORT=7500`                                                   |
 | 装到 Program Files 后数据不在安装目录 | 那里对普通用户不可写，应用自动回落到用户目录；改用默认的 per-user 安装位置即可                                                                                |
 | 想看详细日志                          | `DSH_PET_APP_DEBUG=1 npm run app`，或直接看 `app.log`                                                                                                         |
-| 开机后没有自动启动                    | 先看「任务管理器 → 启动」里 dsh-pet 是否被禁用（Windows 会尊重那里的开关，设置页也会跟着显示为关）；源码态挪过仓库目录的话，回设置页重新勾一次                |
+| 开机后没有自动启动                    | 先看「任务管理器 → 启动」里 dsh-petNG 是否被禁用（Windows 会尊重那里的开关，设置页也会跟着显示为关）；源码态挪过仓库目录的话，回设置页重新勾一次                |
 | 从不提示新版本                        | 国内访问 `api.github.com` 常不通（失败静默）；托盘「检查更新」会明确报错。可用 `DSH_PET_UPDATE_API` 指向镜像或自建 JSON（`{version,url}` 或 GitHub 形状都认） |
 
 ---
@@ -321,7 +328,7 @@ DSH 的包名（`npm run prepack` 会扫描产物，混进 `@deepseek-ai/*` 直�
 
 1. 按 `prompts/桌面宠物 10 秒动作提示词.md` 的配方，用任意视频模型生成 10 秒绿幕视频（16:9，纯绿幕）
 2. `scripts/` 里的 Python 管线：水印遮罩 → 绿幕抠像（或 PR 手工抠像）→ 归一化 → 转码 640×360 VP9-alpha
-3. 产物放进 `dsh-pet/assets/webm/`，再在 `config.jsonc` 的 `animations` 里登记名字
+3. 产物放进 `dsh-pet-ng/assets/webm/`，再在 `config.jsonc` 的 `animations` 里登记名字
 
 源视频体积大，不随仓库发布（本仓库的 Release 只提供程序包，不含源视频）——自己生成即可，生成链脚本与提示词都在仓库里。
 
@@ -332,8 +339,8 @@ DSH 的包名（`npm run prepack` 会扫描产物，混进 `@deepseek-ai/*` 直�
 ```sh
 npm run build           # 构建 lib（主进程 / 启动器 / 设置页 + 桌面共享核心）
 npm run app             # 构建并启动
-npm run app:package     # 免安装 zip 的内容目录：dist/dsh-pet-app/
-npm run app:installer   # Windows 安装包（NSIS）：dist/installer/dsh-pet-<版本>-win-x64-setup.exe
+npm run app:package     # 免安装 zip 的内容目录：dist/dsh-pet-ng-app/
+npm run app:installer   # Windows 安装包（NSIS）：dist/installer/dsh-pet-ng-<版本>-win-x64-setup.exe
 npm run app:smoke       # 端到端冒烟（需要应用已在运行）
 npm test                # 单元测试（纯逻辑 + 源码守卫）
 npm run test:ui         # 真机 UI 回归（需 DSH_PET_ELECTRON 指向一份 Electron）

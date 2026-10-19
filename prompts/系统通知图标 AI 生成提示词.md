@@ -1,6 +1,6 @@
 # 系统通知图标 AI 生成提示词（6 张）
 
-> 用途：dsh-pet 系统通知的小图标（`notify-done/error/truncated/approval/question/test.png`），
+> 用途：dsh-petNG 系统通知的小图标（`notify-done/error/truncated/approval/question/test.png`），
 > 出现在 Windows 桌面通知的左侧 icon 位置。所有图标必须保持**同一角色、同一画风**，可成套使用。
 
 ## 通用要求（每张都遵守）

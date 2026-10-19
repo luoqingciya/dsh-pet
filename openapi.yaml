@@ -1,12 +1,12 @@
 openapi: 3.1.0
 
 info:
-  title: dsh-pet HTTP API
+  title: dsh-petNG HTTP API
   version: 0.8.0
-  summary: dsh-pet 本地 HTTP 接口
+  summary: dsh-petNG 本地 HTTP 接口
   description: |
-    dsh-pet 在本地 `127.0.0.1` 上起一个 HTTP 服务，把全部能力挂在**一条前缀路由** `/dsh-pet-7340` 下。
-    桌面透明窗（经 `dsh-pet-bridge://` scheme）与设置页消费的是同一份实现（`handlePetRoute`）。
+    dsh-petNG 在本地 `127.0.0.1` 上起一个 HTTP 服务，把全部能力挂在**一条前缀路由** `/dsh-pet-ng-7340` 下。
+    桌面透明窗（经 `dsh-pet-ng-bridge://` scheme）与设置页消费的是同一份实现（`handlePetRoute`）。
     本文件是该路由的公开契约：任何第三方脚本都可以按此访问桌宠能力。
 
     ## 部署形态
@@ -17,14 +17,14 @@ info:
       （默认 7340，被占用会自动顺延；可用 `--port` 或 `DSH_PET_APP_PORT` 指定）。
     - 只监听 **127.0.0.1**，不对外网暴露，也**没有任何鉴权**：任何能访问本机该端口的进程都能调用。
       请勿把该端口转发/代理到公网。
-    - 桌面透明窗不走 HTTP，而是 `dsh-pet-bridge://` 自定义 scheme，由主进程的
+    - 桌面透明窗不走 HTTP，而是 `dsh-pet-ng-bridge://` 自定义 scheme，由主进程的
       `protocol.handle` **直接调用**同一个 `handlePetRoute`（同进程函数调用，不经网络、不经管道）。
       所以下表所有路径对两种访问方式行为完全一致。
 
     ## 两分钟上手
 
     ```bash
-    BASE=http://127.0.0.1:7340/dsh-pet-7340
+    BASE=http://127.0.0.1:7340/dsh-pet-ng-7340
 
     # 1. 拉一次统一状态（只读、零副作用，可以随便轮询）
     curl -s $BASE/state
@@ -65,7 +65,7 @@ servers:
   - url: http://127.0.0.1:{port}
     description: |
       本机本地服务。`{port}` 默认 7340。
-      路由前缀固定为 `/dsh-pet-7340`（7340 是历史遗留的名字，**不是端口号**）。
+      路由前缀固定为 `/dsh-pet-ng-7340`（7340 是历史遗留的名字，**不是端口号**）。
     variables:
       port:
         default: "7340"
@@ -82,7 +82,7 @@ tags:
     description: 字体、通知图标、表情包、动画素材
 
 paths:
-  /dsh-pet-7340/state:
+  /dsh-pet-ng-7340/state:
     get:
       tags: [State]
       operationId: getState
@@ -138,7 +138,7 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
-  /dsh-pet-7340/balance:
+  /dsh-pet-ng-7340/balance:
     post:
       tags: [Action]
       operationId: refreshBalance
@@ -164,7 +164,7 @@ paths:
         "405":
           $ref: "#/components/responses/MethodNotAllowed"
 
-  /dsh-pet-7340/whisper:
+  /dsh-pet-ng-7340/whisper:
     post:
       tags: [Action]
       operationId: whisper
@@ -197,7 +197,7 @@ paths:
         "405":
           $ref: "#/components/responses/MethodNotAllowed"
 
-  /dsh-pet-7340/broadcast:
+  /dsh-pet-ng-7340/broadcast:
     post:
       tags: [Action]
       operationId: broadcast
@@ -279,7 +279,7 @@ paths:
         "405":
           $ref: "#/components/responses/MethodNotAllowed"
 
-  /dsh-pet-7340/anim:
+  /dsh-pet-ng-7340/anim:
     post:
       tags: [Action]
       operationId: playAnimation
@@ -290,7 +290,7 @@ paths:
         移动类走真实位移、其余播一遍这些语义天然一致。
 
         名字写进 `pets.<id>.anim`，消费端在 1 秒内轮询发现 `counter` 变化后换源播放。
-        **动画名即素材文件名**（`/dsh-pet-7340/thumb/<素材根>/<名字>.webm`），所以名字必须是
+        **动画名即素材文件名**（`/dsh-pet-ng-7340/thumb/<素材根>/<名字>.webm`），所以名字必须是
         该宠物 `animations` 配置里菜单能点到的名字之一——播放端对不存在的名字没有兜底
         （404 → 加载失败 → 表现为"点了没反应"），因此由宿主在写入前拦下。
 
@@ -373,7 +373,7 @@ paths:
         "405":
           $ref: "#/components/responses/MethodNotAllowed"
 
-  /dsh-pet-7340/work-status:
+  /dsh-pet-ng-7340/work-status:
     post:
       tags: [Action]
       operationId: setWorkStatus
@@ -482,7 +482,7 @@ paths:
         "405":
           $ref: "#/components/responses/MethodNotAllowed"
 
-  /dsh-pet-7340/chat:
+  /dsh-pet-ng-7340/chat:
     get:
       tags: [Action]
       operationId: getChatMemory
@@ -567,14 +567,14 @@ paths:
         "405":
           $ref: "#/components/responses/MethodNotAllowed"
 
-  /dsh-pet-7340/config:
+  /dsh-pet-ng-7340/config:
     get:
       tags: [Config]
       operationId: getConfig
       summary: 读取合并后的成品配置
       description: |
         返回**合并成品**：内置默认（`assets/config.jsonc`）与用户层
-        （`<数据目录>/dsh-pet/main-config.jsonc`）深度合并后的结果，
+        （`<数据目录>/dsh-pet-ng/main-config.jsonc`）深度合并后的结果，
         每个条目的字段都已填满（动画池、权重、物理参数、工作状态文案等），
         桌面窗口与设置页直接消费，**无需任何校验或兜底**。
 
@@ -724,7 +724,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /dsh-pet-7340/pet-display:
+  /dsh-pet-ng-7340/pet-display:
     post:
       tags: [Config]
       operationId: setPetDisplay
@@ -737,7 +737,7 @@ paths:
 
         **层归属由宿主反查，调用方不要传**：`id` 在合并后是**全局唯一**的（`mergePet` 会跳过
         重复实例），宿主用 `findPetInstance` 定位后按条目归属决定写哪个文件——`main` 条目写
-        `<数据目录>/dsh-pet/main-config.jsonc`，文件宠物写 `pet/<前缀>-config.json`（`.jsonc` 同样支持）。
+        `<数据目录>/dsh-pet-ng/main-config.jsonc`，文件宠物写 `pet/<前缀>-config.json`（`.jsonc` 同样支持）。
 
         写入语义与 `PUT /config` 一致：白名单重建 + 磁盘原值透传（不抹掉手写的精调字段）。
         写盘后同样**异步**重建桌面窗口、不阻塞响应。调用方按 fire-and-forget 处理即可。
@@ -798,7 +798,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /dsh-pet-7340/config/meta:
+  /dsh-pet-ng-7340/config/meta:
     get:
       tags: [Config]
       operationId: getConfigMeta
@@ -827,7 +827,7 @@ paths:
                     type: string
                     description: 用户表情包根目录绝对路径
 
-  /dsh-pet-7340/models:
+  /dsh-pet-ng-7340/models:
     get:
       tags: [Config]
       operationId: listModels
@@ -865,7 +865,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /dsh-pet-7340/reload:
+  /dsh-pet-ng-7340/reload:
     post:
       tags: [Action]
       operationId: reload
@@ -892,7 +892,7 @@ paths:
         "405":
           $ref: "#/components/responses/MethodNotAllowed"
 
-  "/dsh-pet-7340/thumb/{petId}/{file}":
+  "/dsh-pet-ng-7340/thumb/{petId}/{file}":
     get:
       tags: [Assets]
       operationId: getAnimation
@@ -941,13 +941,13 @@ paths:
               schema:
                 type: string
         "404":
-          description: "素材不存在（`dsh-pet: asset not found`）"
+          description: "素材不存在（`dsh-petNG: asset not found`）"
           content:
             text/plain:
               schema:
                 type: string
 
-  "/dsh-pet-7340/font/{file}":
+  "/dsh-pet-ng-7340/font/{file}":
     get:
       tags: [Assets]
       operationId: getFont
@@ -964,13 +964,13 @@ paths:
                 type: string
                 format: binary
         "404":
-          description: "字体不存在（`dsh-pet: font not found`）"
+          description: "字体不存在（`dsh-petNG: font not found`）"
           content:
             text/plain:
               schema:
                 type: string
 
-  "/dsh-pet-7340/pic/{file}":
+  "/dsh-pet-ng-7340/pic/{file}":
     get:
       tags: [Assets]
       operationId: getPic
@@ -978,16 +978,16 @@ paths:
       description: |
         静态图，两种形式：
 
-        - `/dsh-pet-7340/pic/<名>.png` → **包内** `assets/pic/`（方形 png，系统通知图标用）。
-        - `/dsh-pet-7340/pic/memes/<素材根>/<名>.png` → 表情包（碎碎念/对话配图用的图），
+        - `/dsh-pet-ng-7340/pic/<名>.png` → **包内** `assets/pic/`（方形 png，系统通知图标用）。
+        - `/dsh-pet-ng-7340/pic/memes/<素材根>/<名>.png` → 表情包（碎碎念/对话配图用的图），
           按素材根决定**素材归属**，与动画（`/thumb`）同一套语义：
           1. `pet/<素材根>-memes/` 存在（种类自带表情包）：**只查该目录**，查不到即 `404` 显式报错，
              **绝不回落**别的目录；
-          2. 不存在：用户目录 `<数据目录>/dsh-pet/memes/` 优先，其次包内 `assets/memes/`（逐文件合并，
+          2. 不存在：用户目录 `<数据目录>/dsh-pet-ng/memes/` 优先，其次包内 `assets/memes/`（逐文件合并，
              与 `main-animation/<ext> → 包内 assets/<ext>` 的主素材链同构）。
 
           素材根 = 该宠物的条目 key（`assetRoot`：主配置宠物为 `main`，文件宠物为配置文件前缀）。
-          旧的两段形式 `/dsh-pet-7340/pic/memes/<名>.png` 仍然可用，等价于素材根 `main` 的回落链
+          旧的两段形式 `/dsh-pet-ng-7340/pic/memes/<名>.png` 仍然可用，等价于素材根 `main` 的回落链
           （未升级的客户端照常取到包内表情包）。
 
           `素材根` 是**标识符**（不是路径片段）：含分隔符 / 保留字符即 `400`，早于任何路径拼接判定。
@@ -1015,13 +1015,13 @@ paths:
                 type: string
                 format: binary
         "400":
-          description: "素材根含非法字符（`dsh-pet: invalid asset root`）"
+          description: "素材根含非法字符（`dsh-petNG: invalid asset root`）"
           content:
             text/plain:
               schema:
                 type: string
         "404":
-          description: "图片不存在（`dsh-pet: pic not found`）"
+          description: "图片不存在（`dsh-petNG: pic not found`）"
           content:
             text/plain:
               schema:
@@ -1472,7 +1472,7 @@ components:
           description: |
             可选配图**名称**（不是 URL）：配置 `memes` 的键，也就是该图文件的文件名（不含扩展名）。
             仅在配置开启了 `whisperImageEnabled` / `chatImageEnabled` 且命中池内图片时出现。
-            消费端（桌面窗口）按素材根拼成 `/dsh-pet-7340/pic/memes/<素材根>/<名>.png`
+            消费端（桌面窗口）按素材根拼成 `/dsh-pet-ng-7340/pic/memes/<素材根>/<名>.png`
             取图，素材根 = 该宠物的条目 key（`assetRoot`）。
         reply:
           type: boolean

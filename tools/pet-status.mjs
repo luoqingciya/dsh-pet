@@ -71,7 +71,7 @@ const body = { state };
 if (args.text) body.text = args.text;
 if (args.ttl !== undefined) body.ttlSec = args.ttl;
 
-const url = `http://127.0.0.1:${args.port}/dsh-pet-7340/work-status`;
+const url = `http://127.0.0.1:${args.port}/dsh-pet-ng-7340/work-status`;
 
 try {
   const res = await fetch(url, {
