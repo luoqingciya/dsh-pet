@@ -175,18 +175,30 @@ test('托盘菜单：刚弹出时的失焦抖动不能把菜单收起', { skip: 
       const other = BrowserWindow.getAllWindows().find((w) => !w.getTitle().includes('托盘菜单'));
       other?.focus();
     });
+  /** 主动把焦点给菜单（让"过了宽限期"那半条不依赖上一步的自动回焦是否成功） */
+  const focusMenu = () =>
+    app.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows()
+        .find((w) => w.getTitle().includes('托盘菜单'))
+        ?.focus();
+    });
 
   try {
     await app.evaluate(() => globalThis.__dshTray.show());
     const shown = await waitFor(menuVisible, 10000);
     assert.ok(shown, '菜单窗口必须弹出来');
 
-    // ① 刚弹出就失焦 = 任务栏把激活抢回去 → 不能收
+    // ① 刚弹出就失焦 = 任务栏把激活抢回去 → 宽限期内不能收。
+    // 只等到 350ms（宽限期 400ms 之后、兜底 600ms 之前）：这条断言的是"抖动不立刻收起"，
+    // 而不是"焦点一定被抢回来了"——后者取决于运行环境能不能抢到前台，不适合当断言。
     await focusOther();
-    await new Promise((r) => setTimeout(r, 700));
+    await new Promise((r) => setTimeout(r, 350));
     assert.equal(await menuVisible(), true, '弹出瞬间的失焦抖动不能把菜单收起（用户报障：弹出又立刻消失）');
 
-    // ② 过了宽限期再失焦 = 用户真的点了别处 → 必须收
+    // ② 过了宽限期再失焦 = 用户真的点了别处 → 必须收。
+    // 先把焦点确定地交给菜单，否则上一步若没回焦成功，这里 blur 是空操作、断言会假失败。
+    await focusMenu();
+    await new Promise((r) => setTimeout(r, 120));
     await focusOther();
     await new Promise((r) => setTimeout(r, 400));
     assert.equal(await menuVisible(), false, '宽限期之后失焦必须收起（否则菜单会变成关不掉的幽灵）');

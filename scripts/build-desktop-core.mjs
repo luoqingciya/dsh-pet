@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 /**
  * build-desktop-core.mjs —— 把 src/shared（浏览器与桌面共用的纯逻辑）构建成
- * src/desktop/shared-core.js（经典 script，全局 window.PetShared）。
+ * lib/desktop/shared-core.js（经典 script，全局 window.PetShared）。
+ *
+ * 产物放 lib/ 而不是源码目录：lib 是构建输出（gitignore + 已在发布清单里），
+ * 源码树里不该出现生成文件。
  *
  * 为什么是经典 script 而非 ESM：Electron 的 loadFile 从 file:// 加载页面，
  * Chromium 对 file:// 的 ES module 有 CORS 限制（origin null 被阻），
@@ -11,7 +14,8 @@
  * 由 prepare.js（发布链）与本地开发 bundle 后调用。
  */
 import { rolldown } from 'rolldown';
-import { join, resolve } from 'node:path';
+import { mkdirSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -21,12 +25,13 @@ try {
     input: join(ROOT, 'src', 'shared', 'index.ts'),
     platform: 'browser',
   });
+  mkdirSync(dirname(join(ROOT, 'lib', 'desktop', 'shared-core.js')), { recursive: true });
   await bundle.write({
     format: 'iife',
     name: 'PetShared',
-    file: join(ROOT, 'src', 'desktop', 'shared-core.js'),
+    file: join(ROOT, 'lib', 'desktop', 'shared-core.js'),
   });
-  console.log('[build-desktop-core] ✓ src/desktop/shared-core.js (window.PetShared)');
+  console.log('[build-desktop-core] ✓ lib/desktop/shared-core.js (window.PetShared)');
 } catch (error) {
   console.error('[build-desktop-core] build failed:', error);
   process.exit(1);

@@ -1,7 +1,6 @@
 lib
 node_modules
 assets
-src/desktop/shared-core.js
 package-lock.json
 # 启动脚本（cmd/sh 无对应 parser，且原样保留换行与注释）
 dsh-pet-ng.cmd

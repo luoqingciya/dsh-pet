@@ -81,7 +81,7 @@ const REQUIRED = [
   'src/desktop/windows.js',
   'src/desktop/preload.js',
   'src/desktop/index.html',
-  'src/desktop/shared-core.js',
+  'lib/desktop/shared-core.js',
   'src/desktop/constants.js',
   'src/desktop/sprite.js',
   'src/desktop/events.js',
@@ -221,5 +221,23 @@ if (!/^\d+\.\d+\.\d+$/.test(pkgVersion)) {
     }
   }
 }
+
+// ---- 9. 桌面页面的 script 路径必须都能解析 ----
+// 这一条来自真实事故：把 shared-core.js 的产物从源码目录挪到 lib/ 后，只改了 index.html，
+// 漏了 tray-menu.html —— 菜单窗口照常弹出，但一个菜单项都渲染不出来（B1 那次同样卡在这里）。
+// 单元测试看不见这类问题，只有真开窗口才发现；这里用静态检查兜住。
+const desktopDir = join(ROOT, 'src', 'desktop');
+const brokenScripts = [];
+for (const html of ['index.html', 'tray-menu.html']) {
+  const page = join(desktopDir, html);
+  if (!existsSync(page)) continue;
+  for (const match of readFileSync(page, 'utf8').matchAll(/<script[^>]+src="([^"]+)"/g)) {
+    const src = match[1];
+    if (/^https?:/i.test(src)) continue;
+    if (!existsSync(resolve(desktopDir, src))) brokenScripts.push(`${html} → ${src}`);
+  }
+}
+if (brokenScripts.length > 0) fail(`桌面页面的 script 解析不到：${brokenScripts.join('、')}`);
+else ok('桌面页面的 script 路径均可解析');
 
 console.log(process.exitCode ? '[prepack-check] 未通过' : '[prepack-check] 全部通过');
