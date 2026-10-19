@@ -46,10 +46,10 @@ export function secretsFile(): string {
  * 目录里有没有「用户数据」。
  *
  * 判「是否已经接管过」**不能用 existsSync，也不能数所有文件**：主进程在写日志时就会
- * `mkdirSync(petDataDir())` 并落一个 `app.log`。所以只认真正属于用户的东西，
- * 日志文件不算。
+ * `mkdirSync(petDataDir())` 并落一个 `app.log`，首次运行还会写 `.initialized` 标记。
+ * 这两个都不算用户数据 —— 否则「装好先启动看了一眼、才发现要迁移」就永远迁不过来了。
  */
-const NON_DATA_FILES = new Set(['app.log', 'app.log.1']);
+const NON_DATA_FILES = new Set(['app.log', 'app.log.1', '.initialized']);
 
 function hasEntries(dir: string): boolean {
   try {
