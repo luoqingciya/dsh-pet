@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * dsh-petNG desktop helper —— 事件联动（余额 / 碎碎念 / 广播 / 工作状态）。
  *
@@ -11,6 +12,10 @@
 //   success/error（"这事结束了"）10s 自动收起；state=null（空闲/回合被打断）收起气泡回待机。
 // 动画循环语义：进行中档位循环播（switchTo once=false），终态档位播一遍回 idle 链；
 //   回空闲时把正在循环的那段改成"播完即停"（见下面空闲分支），否则 ended 永不触发、链回不去。
+/**
+ * @param {import('../shared/work-status').WorkStatusSnapshot} snapshot
+ * @param {number} tick
+ */
 PetSprite.prototype.onWorkTick = function onWorkTick(snapshot, tick) {
   if (!this.pet.workStatusEnabled) return; // 未启用工作状态联动 -> 该宠物完全免疫（与浏览器一致）
   if (tick === 0 || tick === this.prevWorkTick) return;
@@ -20,7 +25,7 @@ PetSprite.prototype.onWorkTick = function onWorkTick(snapshot, tick) {
   const stateChanged = this.prevWorkState !== state;
   this.prevWorkState = state;
   if (!state) {
-    // 回空闲：把正在**循环播**的进行中档位动画改成"播完即停"（与浏览器 src/client/pet.ts 的空闲分支
+    // 回空闲：把正在**循环播**的进行中档位动画改成"播完即停"（与已移出的浏览器侧 pet.ts 的空闲分支
     // 同一处修复）。进行中档位走 switchTo(name, false)（el.loop=true、el.onended=null），ended 永不
     // 触发；而这里不切动画（原设计"由常规动画链回待机"），链因此拿不到推进信号 —— 宠物会一直卡在
     // 那段工作动画上。只把当前段改成播完即停：它结束后走 handleEnded → resumeWorkStatusAnim() 返回
@@ -97,6 +102,11 @@ PetSprite.prototype.onWorkTick = function onWorkTick(snapshot, tick) {
 
 // ---- 余额事件（自动轮询按 balanceEnabled 门控，手动请求无条件；档位与气泡内容来自 shared） ----
 // manual = 这次刷新是用户主动要的（右键「查看余额」/ `/balance` 命令）：不受开关限制，一律给答复。
+/**
+ * @param {import('../shared/balance').BalanceState} state
+ * @param {number} tick
+ * @param {boolean} manual
+ */
 PetSprite.prototype.onBalanceTick = function onBalanceTick(state, tick, manual) {
   if (!this.pet.balanceEnabled && !manual) return; // 自动轮询受开关门控；手动无条件通过（与浏览器一致）
   if (tick === 0 || tick === this.prevTick) return;
@@ -108,6 +118,10 @@ PetSprite.prototype.onBalanceTick = function onBalanceTick(state, tick, manual) 
 // （非 ok 没有百分比语义，档位动画无从映射）。显隐/定时与成功路径同一套（10s 自动消失）；
 // 不 stopMove——本次没有动画要抢前台，宠物没必要停下漫游。
 // 门控：自动轮询要求 balanceEnabled；**手动请求无条件弹**（用户问了就该有答复，包括"服务商不支持"这件事）。
+/**
+ * @param {import('../shared/balance').BalanceState} state
+ * @param {boolean} manual
+ */
 PetSprite.prototype.showBalanceNotice = function showBalanceNotice(state, manual) {
   if (!this.pet.balanceEnabled && !manual) return; // 自动轮询受开关门控；手动无条件通过
   if (!state || state.ok) return;
@@ -129,6 +143,11 @@ PetSprite.prototype.showBalanceNotice = function showBalanceNotice(state, manual
 
 // 碎碎念展示（本宠物）：随机抽 events.whisper 动画 + 弹文本气泡（10s 消失，与余额同一语义）
 // image：host 随机抽定的配图名称（未开配图/池为空则空串，与浏览器端同一契约）
+/**
+ * @param {string} text
+ * @param {string} image
+ * @param {boolean} reply
+ */
 PetSprite.prototype.showWhisper = function showWhisper(text, image, reply) {
   const pool = this.animations.events?.whisper;
   if (!pool || pool.length === 0) {
@@ -178,6 +197,10 @@ PetSprite.prototype.showWhisper = function showWhisper(text, image, reply) {
 //  - 弹气泡：手动请求（manual）**无条件**弹——用户问了就得有答复，哪怕这只宠物关了 balanceEnabled、
 //    哪怕服务商没有百分比语义（纯余额金额也照样显示）；自动轮询则要求有百分比依据。
 //  - 档位动画：只属于启用余额的宠物，且要有百分比依据（关掉开关的宠物不该因为被点一次菜单就突然演一遍）。
+/**
+ * @param {import('../shared/balance').BalanceState} state
+ * @param {boolean} manual
+ */
 PetSprite.prototype.showBalanceNow = function showBalanceNow(state, manual) {
   if (!state || !state.ok) return;
   const p = S.balancePercent(state);
@@ -216,6 +239,10 @@ PetSprite.prototype.showBalanceNow = function showBalanceNow(state, manual) {
 // 余额不可用 → 文字说明气泡（周期轮询与手动 /balance 触发共用这一条路径；判定在 shared，与浏览器同一份）：
 // explicit=true（手动触发）一律弹——用户问了就该有答复，包括"服务商不支持"这件事；
 // 自动轮询仅在原因（含服务商）变化时弹一次，避免每 30 分钟反复刷同一句话。
+/**
+ * @param {import('../shared/balance').BalanceUnavailable} state 只处理不可用分支（ok 的走 showBalanceNow）
+ * @param {boolean} explicit 这次是用户主动要的（右键「查看余额」/`/balance` 命令）
+ */
 function applyBalanceNotice(state, explicit) {
   const notice = S.decideBalanceNotice(state, balanceNoticeKey, explicit);
   balanceNoticeKey = notice.key;
@@ -229,9 +256,13 @@ function applyBalanceNotice(state, explicit) {
 // ---------- 统一轮询（GET /state，1s）：与浏览器同一份数据来源与渲染入口 ----------
 // 每个叶子 = { counter, data }：首拉只记基线（不渲染），之后 counter 变了才渲染。
 // 各功能逐个接入，旧的独立轮询循环随迁随删。
+/** 上一次 /state 的计数器快照（path → counter）；null = 还没首拉 @type {Record<string, number> | null} */
 let stateBaseline = null;
 
-/** 余额叶子 → 展示（成功播档位动画 + 气泡；不可用按 shared 判定弹文字说明） */
+/**
+ * 余额叶子 → 展示（成功播档位动画 + 气泡；不可用按 shared 判定弹文字说明）
+ * @param {import('../shared/state').StateLeaf} leaf
+ */
 function applyBalanceLeaf(leaf) {
   const hit = S.readBalance(leaf);
   if (!hit) return;
@@ -247,16 +278,20 @@ function applyBalanceLeaf(leaf) {
 }
 
 /** 说话叶子 → 对应宠物播说话动画 + 气泡（碎碎念/命令气泡/对话回复三合一）。
- *  petId 由路径解析出来（pets.<id>.say）；本窗口只装一只宠物，按 id 命中即可。 */
+ *  petId 由路径解析出来（pets.<id>.say）；本窗口只装一只宠物，按 id 命中即可。
+ *  @param {string} petId
+ *  @param {import('../shared/state').StateLeaf} leaf */
 function applySayLeaf(petId, leaf) {
   const said = S.readSay(leaf);
   if (!said) return;
   for (const s of sprites) {
-    if (s.pet.id === petId) s.showWhisper(said.text, said.image, said.reply);
+    // image / reply 在 readSay 里是可选键（缺省不写 undefined，见其注释），这里补成展示层的必填形状
+    if (s.pet.id === petId) s.showWhisper(said.text, said.image ?? '', said.reply === true);
   }
 }
 
-/** 工作状态叶子 → 各宠物切档位动画 + 气泡（含回到空闲：state=null 用于收起常驻气泡） */
+/** 工作状态叶子 → 各宠物切档位动画 + 气泡（含回到空闲：state=null 用于收起常驻气泡）
+ *  @param {import('../shared/state').StateLeaf} leaf */
 function applyWorkStatusLeaf(leaf) {
   const snap = S.toWorkStatus(leaf.data);
   if (!snap) return;
@@ -267,7 +302,9 @@ function applyWorkStatusLeaf(leaf) {
 /** 点播动画叶子 → 对应宠物播该动画（其他插件经 POST /anim 写进 S）。
  *  复用**右键菜单同一个处理函数** onMenuAction，所以镜像修正 / 移动类走真实位移 /
  *  其余播一遍的语义与菜单点一下完全一致，这里不重写一遍。
- *  petId 由路径解析出来（pets.<id>.anim）；本窗口只装一只宠物，按 id 命中即可。 */
+ *  petId 由路径解析出来（pets.<id>.anim）；本窗口只装一只宠物，按 id 命中即可。
+ *  @param {string} petId
+ *  @param {import('../shared/state').StateLeaf} leaf */
 function applyAnimLeaf(petId, leaf) {
   const hit = S.readAnim(leaf);
   if (!hit) return;

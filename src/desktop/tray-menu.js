@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * 托盘菜单（自绘）—— 与宠物右键菜单**共用同一个组件**（`S.mountContextMenu`）。
  *
@@ -31,7 +32,7 @@ function ensureMenuStyle() {
   document.head.appendChild(style);
 }
 
-/** 当前挂载的菜单（重新弹出前先关掉旧的） */
+/** 当前挂载的菜单（重新弹出前先关掉旧的） @type {import('../shared/menu').ContextMenuMount | null} */
 let mounted = null;
 
 function closeMenu() {
@@ -77,7 +78,8 @@ window.petBridge.onTrayMenu((payload) => {
   // 最后一项「退出」被切掉（表现为菜单少一项、还得滚）。
   // 这里按内容撑开，高度上限交给主进程的窗口夹取（pet:tray-size 里 760px）。
   // 前提是托盘菜单是一份很短的固定列表（TRAY_ITEMS）；将来真要塞几十项，得改成按屏高限高。
-  const panel = menu.el.querySelector('.dsh-pet-ng-menu-column') || menu.el;
+  // querySelector 的静态类型是 Element，但这里查的是面板（或根容器本身），一定是元素节点
+  const panel = /** @type {HTMLElement} */ (menu.el.querySelector('.dsh-pet-ng-menu-column') || menu.el);
   panel.style.maxHeight = 'none';
 
   // 渲染完量真实尺寸：主进程按它收缩窗口，透明区域不留（少挡下层点击）。

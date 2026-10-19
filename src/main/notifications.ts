@@ -2,7 +2,7 @@
  * 本地应用的系统通知：轮询 `/state`，把宿主写进 `sections.notify` 的通知帧翻成
  * **系统级原生通知**（Electron `Notification`）。
  *
- * 为什么不复用 `src/client/notify.ts`：那是浏览器侧实现（Web Notification API + 页面聚焦判定），
+ * 为什么不复用浏览器侧的 `notify.ts`（已随 overlay 移出本仓库）：那是 Web Notification API + 页面聚焦判定，
  * 而本地应用没有浏览器页面——宠物是独立透明窗口，用户此时很可能正在别的应用里，
  * 「窗口失焦才弹」这条规则在这里恰好**永远成立**，所以直接弹原生通知就是正确行为。
  * 帧 → 文案的映射仍然复用 `shared/notify.ts` 的 `frameToToast`（单一来源，不另写一套文案）。

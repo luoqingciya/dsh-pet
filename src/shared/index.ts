@@ -11,8 +11,11 @@ export * from './constants';
 export * from './pickers';
 export * from './displays'; // 多显示器几何（桌面 = 工作区矩形并集，而非它们的外接矩形）
 export * from './motion';
+export * from './drive'; // 位置驱动源状态机（漫游/拖拽/抛掷 谁在写位置：纯逻辑 + 转移表）
+export * from './drive-loops'; // 三个位置驱动循环（rAF + 时钟可注入：无 DOM、无 IPC，可单测）
 export * from './balance';
 export * from './whisper';
+export * from './bubble'; // 气泡单槽（选哪个=纯决策 / 怎么画=DOM，第 4 个 DOM 例外）
 export * from './config';
 export * from './fonts'; // 字体预设（id → CSS 字体栈）+ 字号换算（浏览器与桌面共用同一份）
 export * from './notify';

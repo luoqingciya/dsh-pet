@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * dsh-petNG desktop helper —— 基础设施（常量 + 全局状态 + 调试钩子）。
  *
@@ -22,9 +23,15 @@ const CONFIG = {
 // **同一套 CSS 像素**里——固定 px UI 随缩放自动恢复 DIP 观感，组件代码零换算。
 // 主进程侧（窗口 bounds、逐屏几何、碰撞 broker）仍是物理像素：与它交换的值只允许在下面两个
 // 收口换算（×scale 发出去 / ÷scale 收进来），任何组件代码不得再乘除（防散修回归）。
+/** 本地（CSS）→ 屏幕（物理）：只在发给主进程时用，见上面的收口约定
+ * @param {number} v
+ * @returns {number} */
 function toScreen(v) {
   return v * CONFIG.scale;
 }
+/** 屏幕（物理）→ 本地（CSS）：只在收主进程数据时用
+ * @param {number} v
+ * @returns {number} */
 function toLocal(v) {
   return v / CONFIG.scale;
 }
@@ -52,17 +59,26 @@ const VIEW = {
   w: toLocal(VIEW_SCREEN.w),
   h: toLocal(VIEW_SCREEN.h),
 };
-/** 逐显示器工作区，**视口相对坐标**（= 屏幕坐标 − VIEW 原点）。抛掷/漫游/菜单夹取都走它们的并集 */
+/** 逐显示器工作区，**视口相对坐标**（= 屏幕坐标 − VIEW 原点）。抛掷/漫游/菜单夹取都走它们的并集
+ *  @type {DshRect[]} */
 let AREAS = [];
-/** 菜单/聊天框/提示仍限制在工作区，不能随宠物进入菜单栏或 Dock。 */
+/** 菜单/聊天框/提示仍限制在工作区，不能随宠物进入菜单栏或 Dock。
+ *  @type {DshRect[]} */
 let WORK_AREAS = [];
 /** 逐显示器**完整面板**（含任务栏区，视口相对坐标，与 AREAS 同序）：抛掷「越界侧有没有邻屏」
- *  的探测用它——任务栏在接缝处挖出的工作区条带不当墙（见 shared/physics.ts） */
+ *  的探测用它——任务栏在接缝处挖出的工作区条带不当墙（见 shared/physics.ts）
+ *  @type {DshRect[]} */
 let PANELS = [];
-/** 主屏工作区（视口相对坐标）：角落定位与「回到初始位置」用它——外接矩形的角落可能落在空洞里 */
+/** 主屏工作区（视口相对坐标）：角落定位与「回到初始位置」用它——外接矩形的角落可能落在空洞里
+ *  @type {DshRect | null} */
 let PRIMARY_AREA = null;
 
 /** 把主进程给的桌面几何（{hull, areas, panels, primaryIndex}，屏幕坐标）挂到 VIEW / AREAS / PANELS */
+/**
+ * 把主进程给的桌面几何挂到 VIEW / AREAS / PANELS。
+ * @param {DshDeskGeometryPayload} geo 物理像素
+ * @returns {boolean} 几何非法（尺寸为 0 / 空列表）时返回 false，调用方保持原状
+ */
 function applyDeskGeometry(geo) {
   const hull = geo && geo.hull;
   const list = geo && Array.isArray(geo.areas) ? geo.areas.filter((a) => a && a.width > 0 && a.height > 0) : [];
@@ -148,14 +164,45 @@ const BUBBLE_DURATION_MS = 10 * 1000; // 余额/碎碎念气泡展示时长（�
 const WINDOW_MARGIN_RATIO = 0.5;
 
 // ---------- 全局状态 ----------
-const rootEl = document.getElementById('root');
-const errorEl = document.getElementById('pet-error');
-let config = null; // { pets: 拍平后的成品实例列表, physics, confineToScreen }（loadConfig 填充）
-let sprites = []; // PetSprite[]（本窗口只装一只宠物）
-let balance = null; // BalanceState（本窗口单宠共用）
+/**
+ * 一次配置加载的成品（renderer.js 的 loadConfig 填充；null = 尚未加载成功）。
+ * 这几个字段就是窗口层跑起来所需的全部配置，其它一律不读。
+ * @typedef {object} DesktopConfig
+ * @property {import('../shared/types').Pet[]} pets 拍平后的宠物实例（已按 display 过滤前的全量）
+ * @property {import('../shared/types').PhysicsParams} physics 拖拽抛掷物理参数
+ * @property {boolean} confineToScreen 抛掷是否锁定在当前屏幕
+ * @property {import('../shared/types').FontConfig} font 全局字体（族/字号/是否加粗）
+ * @property {import('../shared/types').Animations | undefined} animations 主条目的动画池（宠物自带池时的缺省）
+ * @property {import('../shared/types').Weights | undefined} animationWeights 主条目的动画权重（同上）
+ */
+/**
+ * 精灵挂载点：`index.html` 静态预置（`<div id="root">`），构造期一定存在。
+ * 与 errorEl 同一套理由——断言非空，下游不必逐处判空。
+ * @type {HTMLElement}
+ */
+const rootEl = /** @type {HTMLElement} */ (document.getElementById('root'));
+/**
+ * 红色错误条：`index.html` 静态预置（`<div id="pet-error" class="pet-error">`），构造期一定存在。
+ * 这里断言非空，是为了让下游（renderer.js 的 showError/hideError）不必逐处判空——
+ * 万一哪天 index.html 漏了这个节点，启动即抛（大声失败），而不是"报错条静默不显示"。
+ * @type {HTMLElement}
+ */
+const errorEl = /** @type {HTMLElement} */ (document.getElementById('pet-error'));
+/** @type {DesktopConfig | null} */
+let config = null;
+/** @type {PetSprite[]} 本窗口只装一只宠物（petIndex 由主进程注入） */
+let sprites = [];
+/** 最近一次成功解析的余额（本窗口单宠共用；null = 还没拉到） @type {import('../shared/balance').BalanceState | null} */
+let balance = null;
 let balanceTick = 0;
-let balanceNoticeKey = null; // 上次已提示的不可用原因（reason:provider）：自动轮询只在原因变化时再弹（判定在 shared，与浏览器同一份）
+/**
+ * 上次已提示的不可用原因（`reason:provider`）：自动轮询只在原因变化时再弹
+ * （判定在 shared 的 decideBalanceNotice，与浏览器同一份）
+ * @type {string | null}
+ */
+let balanceNoticeKey = null;
 let workTick = 0; // 工作状态联动 tick：容器 1s 轮询 /state 的 sections.workStatus，counter 变化才递增（各启用宠物以此触发）
+/** 配置加载失败后的重试定时器（5s）；非空表示已排队 @type {ReturnType<typeof setTimeout> | null} */
 let bootTimer = null;
 let loopsStarted = false;
 
@@ -169,6 +216,9 @@ window.__dshPetDebug = {
   menuOpen: false,
   chatOpen: false,
   bootAt: Date.now(),
+  // 位置驱动源（漫游/拖拽/抛掷/静止）：sprite 的 setDrive/releaseDrive 会同步维护。
+  // 在声明处给初值，是为了让"还没建精灵"和"精灵静止"在排障时都读到确定的值（不是 undefined）。
+  drive: 'none',
 };
 window.addEventListener('error', (event) => {
   window.__dshPetDebug.errors.push(String(event.message || event.error));

@@ -1,3 +1,4 @@
+// @ts-check
 // preload 桥：只暴露窗口控制原语——
 //   - setBounds：宠物窗口逐帧跟随（renderer 上报包围盒的屏幕坐标，主进程 setContentBounds）。
 //     x/y/width/height = 窗口内容区坐标（用于移动窗口）；boxX/boxY = 宠物包围盒左上角
@@ -21,7 +22,13 @@
 //       onPetHit：订阅「你被撞了」→ 用新初速 startThrow 抛出去（与浏览器 onHit 同语义）。
 const { contextBridge, ipcRenderer } = require('electron');
 
-contextBridge.exposeInMainWorld('petBridge', {
+/**
+ * 暴露给渲染端的门面。**注解成 `PetBridge`（globals.d.ts）是刻意的**：
+ * 那份声明是渲染端唯一的类型来源，这里让实现直接对齐它——签名漂移会在 typecheck 就报出来，
+ * 而不是等到运行期"渲染端调用某个不存在的方法"。
+ * @type {PetBridge}
+ */
+const bridge = {
   setBounds(x, y, width, height, boxX, boxY, size, bottomPad, vx, vy, marginL, marginT) {
     ipcRenderer.send('pet:set-bounds', {
       x,
@@ -57,23 +64,27 @@ contextBridge.exposeInMainWorld('petBridge', {
     ipcRenderer.send('pet:report-flight', state);
   },
   onFlightStates(cb) {
-    ipcRenderer.on('pet:flight-states', (e, states) => cb(states));
+    ipcRenderer.on('pet:flight-states', (_e, states) => cb(/** @type {Record<string, DshPetState>} */ (states)));
   },
   reportCollide(targetId, vx, vy) {
     ipcRenderer.send('pet:collide-result', { targetId, vx, vy });
   },
   onPetHit(cb) {
-    ipcRenderer.on('pet:hit', (e, payload) => cb(payload));
+    ipcRenderer.on('pet:hit', (_e, payload) => cb(/** @type {{ vx: number, vy: number }} */ (payload)));
   },
   // 显示器热更新：分辨率/缩放变化、插拔屏、旋转后主进程重算桌面几何并推来
   // （{hull, areas, primaryIndex}，屏幕坐标）——渲染端就地重挂视口与边界。
   onDisplays(cb) {
-    ipcRenderer.on('pet:displays', (e, geo) => cb(geo));
+    // IPC 负载在桥上是 unknown（见 electron.d.ts 的 ipcRenderer.on）：形状在这里断言，
+    // 与 PetBridge.onDisplays 的声明一一对应。
+    ipcRenderer.on('pet:displays', (_e, geo) => cb(/** @type {DshDeskGeometryPayload} */ (geo)));
   },
   // ---- 托盘菜单（自绘窗口，见 tray-menu.js）----
   // 为什么托盘菜单要自绘：Windows 的原生托盘菜单不跟随应用的 DPI 补偿，150% 屏上只有 2/3 大。
   onTrayMenu(cb) {
-    ipcRenderer.on('pet:tray-menu', (e, payload) => cb(payload));
+    ipcRenderer.on('pet:tray-menu', (_e, payload) =>
+      cb(/** @type {{ items: import('../shared/menu').MenuNode[] }} */ (payload)),
+    );
   },
   /** 渲染完把菜单真实尺寸报回去（主进程据此收缩窗口） */
   trayMenuSize(size) {
@@ -87,4 +98,6 @@ contextBridge.exposeInMainWorld('petBridge', {
   trayClose() {
     ipcRenderer.send('pet:tray-close');
   },
-});
+};
+
+contextBridge.exposeInMainWorld('petBridge', bridge);

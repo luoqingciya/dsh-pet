@@ -258,8 +258,12 @@ dsh-petNG.exe（单个 Electron 进程）
 | `src/desktop`  | shared                        | 桌面窗口层（渲染端，经典 script）               |
 | `src/ui`       | shared                        | 设置页（浏览器代码，**不许 import `node:*`**）  |
 | `src/core`     | shared · platform             | 纯业务：配置 / 状态 / 素材 / 余额 / 对话        |
-| `src/shared`   | —                             | 两端共用的纯逻辑（菜单、气泡、物理、文案）      |
+| `src/shared`   | —                             | 纯逻辑（菜单、气泡、物理、文案）；见下方注      |
 | `src/platform` | —                             | electron 的薄封装，让 core 能脱离 electron 单测 |
+
+> 「两端共用」里的另一端是浏览器 overlay（DSH 插件侧），**已随项目剥离移出本仓库**。
+> `src/shared` 仍按「两端同构」维护：改动时以这里的实现为准，代码注释里提到的
+> `src/client/pet.ts` / `notify.ts` 都是那份已移出的实现（用于解释"为什么要拆成这样"）。
 
 `npm run check:layers` 把这条规则当门禁跑（CI 的 verify 里）：反向边、循环依赖、
 以及 `ui` / `desktop` 里误引 `node:*` 都会直接判红。测试文件整份豁免——它们要跨层做集成验证。

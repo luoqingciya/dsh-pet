@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * dsh-petNG 桌面窗口层 —— 透明置顶小窗的创建与维护（**跑在应用主进程里**，不是独立进程）。
  *
@@ -140,27 +141,31 @@ function readCachedPrimaryScale() {
   }
 }
 
+/** @param {number} value */
 function writeCachedPrimaryScale(value) {
   try {
     writeFileSync(dpiCacheFile(), JSON.stringify({ scaleFactor: value }), 'utf8');
   } catch (e) {
-    console.error('[dsh-pet-ng-desktop-helper] write dpi cache failed:', String(e && e.message ? e.message : e));
+    console.error('[dsh-pet-ng-desktop-helper] write dpi cache failed:', String(e instanceof Error ? e.message : e));
   }
 }
 
-/** 从探测子进程的输出里抓 scaleFactor（0 = 没抓到） */
+/** 从探测子进程的输出里抓 scaleFactor（0 = 没抓到）
+ *  @param {string} text */
 function parseProbeOutput(text) {
   const m = new RegExp(DPI_MARK + '([0-9.]+)').exec(String(text || ''));
   const v = m ? Number(m[1]) : 0;
   return Number.isFinite(v) && v > 0 ? v : 0;
 }
 
-/** 探测命令（由 prepareRuntime 注入）。缺省 = 「再跑一遍本文件」，只用于独立开发模式 */
+/** 探测命令（由 prepareRuntime 注入）。缺省 = 「再跑一遍本文件」，只用于独立开发模式
+ *  @type {{ command: string, args: string[], env?: Record<string, string> } | null} */
 let probeCommand = null;
 
 /** 拉起探测子进程读主屏 scaleFactor（此时本进程还没加 force-device-scale-factor，读到的是真实值） */
 function probePrimaryScale() {
   const cmd = probeCommand || { command: process.execPath, args: [__filename] };
+  /** @type {import('node:child_process').ExecFileSyncOptionsWithStringEncoding} */
   const opts = {
     env: { ...process.env, DSH_PET_DPI_PROBE: '1', ...(cmd.env || {}) },
     timeout: 20000,
@@ -174,19 +179,17 @@ function probePrimaryScale() {
   } catch (e) {
     // 只认 stdout，不认退出码：一个不开窗口的 Electron 进程调 app.exit() 在 Windows 上
     // 偶发 0xC0000005（退出期访问违例），但那时值早就写出来了，丢掉它纯属浪费一次冷启动。
-    out = e && e.stdout ? String(e.stdout) : '';
+    // catch 变量是 unknown：子进程失败对象的形状按 node 约定就地断言（stdout/stderr 可能是 Buffer）
+    const err = /** @type {{ stdout?: unknown, stderr?: unknown, status?: number, message?: string }} */ (e);
+    out = err.stdout ? String(err.stdout) : '';
     if (!parseProbeOutput(out)) {
       const detail = [
-        e && e.status !== undefined ? 'status=' + e.status : '',
-        e && e.stderr ? 'stderr=' + String(e.stderr).trim().slice(0, 300) : '',
+        err.status !== undefined ? 'status=' + err.status : '',
+        err.stderr ? 'stderr=' + String(err.stderr).trim().slice(0, 300) : '',
       ]
         .filter(Boolean)
         .join(' ');
-      console.error(
-        '[dsh-pet-ng-desktop-helper] dpi probe failed:',
-        String(e && e.message ? e.message : e).split('\n')[0],
-        detail,
-      );
+      console.error('[dsh-pet-ng-desktop-helper] dpi probe failed:', String(err.message ?? e).split('\n')[0], detail);
       return 0; // 探测失败：不加 switch，退回修复前行为（多屏异构 DPI 会闪，但不影响可用性）
     }
   }
@@ -249,10 +252,12 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 
-/** 窗口表：petId -> BrowserWindow */
+/** 窗口表：petId -> BrowserWindow
+ *  @type {Map<string, import('electron').BrowserWindow>} */
 const windows = new Map();
 
 /** win.id -> 上一次**请求**的内容区矩形（"x,y,w,h"）：pet:set-bounds 的去重基准，见那里的注释 */
+/** @type {Map<number, string>} */
 const lastRequestedBounds = new Map();
 
 /**
@@ -260,6 +265,7 @@ const lastRequestedBounds = new Map();
  * 上边距按气泡最大高度加高后**余量不再四边相等**，命中区不能再按「窗口宽/4」反推——
  * 这里存下来交给 pointer-target 的 spriteHitRect（见那里的注释）。
  */
+/** @type {Map<number, { l: number, t: number }>} */
 const winMargins = new Map();
 
 /**
@@ -268,10 +274,12 @@ const winMargins = new Map();
  *       pet:report-flight（飞行中每 ~30ms 高频补充速度）。
  * 任何更新都广播全量给所有窗口——每窗飞行方用它做跨窗碰撞检测（滞后 ≤ 1 帧，可接受）。
  */
+/** @type {Map<string, DshPetState>} */
 const petStates = new Map();
 
 /** 把当前全量宠物状态广播给所有窗口（碰撞检测的共享站场） */
 function broadcastPetStates() {
+  /** @type {Record<string, DshPetState>} */
   const states = {};
   for (const [pid, s] of petStates) {
     states[pid] = { x: s.x, y: s.y, vx: s.vx, vy: s.vy, size: s.size, bottomPad: s.bottomPad };
@@ -281,7 +289,9 @@ function broadcastPetStates() {
   }
 }
 
-/** 记录/更新一只宠物的状态并广播 */
+/** 记录/更新一只宠物的状态并广播
+ *  @param {string} petId
+ *  @param {Partial<DshPetState>} partial */
 function updatePetState(petId, partial) {
   const prev = petStates.get(petId) || { x: 0, y: 0, vx: 0, vy: 0, size: 0, bottomPad: 0 };
   petStates.set(petId, Object.assign({}, prev, partial));
@@ -293,9 +303,11 @@ function updatePetState(petId, partial) {
  * （创建时初始化 + pet:set-interactive 翻转 + 光标兜底轮询），这里镜像真实状态，供冒烟断言/排查使用
  * （Electron 无 isIgnoringMouseEvents 取值 API）。
  */
+/** @type {Map<number, boolean>} */
 const windowIgnore = new Map();
 
 /** 翻转整窗穿透的**唯一出口**：状态与 windowIgnore 镜像永远一起更新（穿透期间保留 forward） */
+/** @param {import('electron').BrowserWindow} win @param {boolean} ignore */
 function setWindowIgnore(win, ignore) {
   win.setIgnoreMouseEvents(ignore, { forward: true });
   windowIgnore.set(win.id, ignore);
@@ -317,11 +329,14 @@ let pointerFallbackPaused = false;
  * 主进程**无法自行判断**这件事（光看光标位置和窗口位移分不清"拖拽跟手"与"漫游/抛掷"），
  * 而渲染端知道（拖拽中 / 菜单开着 / 对话弹窗开着）。所以只由它上报，busy 期间本进程绝不翻回穿透。
  */
+/** @type {Map<number, boolean>} */
 const inputBusy = new Map();
 /** 新渲染端把菜单/聊天框局部矩形单独上报，避免忙碌态下整窗透明余量吞点击。 */
+/** @type {Map<number, { dragging: boolean, rects: DshRect[] }>} */
 const inputRegions = new Map();
 
 /** 每窗口「光标停在余量区且非 busy」的连续时长（ms）：到点由兜底通道强制恢复穿透 */
+/** @type {Map<number, number>} */
 const offBodyMs = new Map();
 
 /**
@@ -348,6 +363,7 @@ function petsFromEnv() {
 
 /** 窗口初始尺寸 = 宠物包围盒 + 四周外扩余量（4×0.5×size，与 renderer 的 WINDOW_MARGIN_RATIO 一致；
  *  renderer 首帧 set-bounds 会按真实配置精确覆盖，这里只是避免启动瞬间的尺寸跳变）。 */
+/** @param {number} size */
 function petWindowSize(size) {
   const height = (size * 9) / 16;
   const bottomPad = (size * (9 / 16) * (360 - 330)) / 360;
@@ -367,7 +383,9 @@ function deskGeometry() {
   return buildDeskGeometry(screen.getAllDisplays(), screen.getPrimaryDisplay().id, process.platform);
 }
 
-/** 按给定宠物列表与桌面几何建窗（调用方已算好，避免一次 reload 里重复探测显示器） */
+/** 按给定宠物列表与桌面几何建窗（调用方已算好，避免一次 reload 里重复探测显示器）
+ *  @param {DshDesktopPet[]} pets
+ *  @param {DshDeskGeometryPayload} geo */
 function createPetWindows(pets, geo) {
   const area = geo.hull;
   const configUrl = currentConfigUrl;
@@ -527,10 +545,13 @@ function createPetWindows(pets, geo) {
 // （宿主侧注入的就是 handlePetRoute，与 HTTP 路由同一份实现）。
 // 素材仍走「宿主回文件绝对路径 → 这里读盘」，二进制不经过 JSON。
 
-/** 宿主注入的请求处理函数（不注入 = 独立开发模式，渲染端直连 HTTP） */
+/** 宿主注入的请求处理函数（不注入 = 独立开发模式，渲染端直连 HTTP）
+ *  @type {DshBridgeHandler | null} */
 let routeRequest = null;
 
-/** 处理一个渲染端请求：调宿主处理函数 → 组装 Response（素材读盘） */
+/** 处理一个渲染端请求：调宿主处理函数 → 组装 Response（素材读盘）
+ *  @param {import('electron').ProtocolRequest} request
+ *  @returns {Promise<Response>} */
 async function handleBridgeRequest(request) {
   const url = new URL(request.url); // dsh-pet-ng-bridge://dsh-pet-ng/dsh-pet-ng-7340/...
   const method = request.method || 'GET';
@@ -538,7 +559,10 @@ async function handleBridgeRequest(request) {
   if (method === 'POST' || method === 'PUT') {
     body = await request.text();
   }
-  const resp = await routeRequest(method, url.pathname + url.search, body);
+  // ensureProtocol 只在注入了处理函数时才注册本 handler，故此处必然非空
+  const route = /** @type {DshBridgeHandler} */ (routeRequest);
+  const resp = await route(method, url.pathname + url.search, body);
+  /** @type {Record<string, string>} */
   const headers = { 'access-control-allow-origin': '*' }; // 渲染端页面是 file:// 源，scheme 跨源需 CORS
   if (resp.contentType) headers['content-type'] = resp.contentType;
   if (resp.file) {
@@ -600,6 +624,8 @@ function destroyWindows() {
  * 归一化宿主给的宠物列表：补上窗口序号（渲染端用它区分多只宠物的 query 与缓存键）
  * 并把非法尺寸挡在窗口尺寸计算之前。
  */
+/** @param {unknown} pets
+ *  @returns {DshDesktopPet[]} */
 function normalizePets(pets) {
   if (!Array.isArray(pets)) return [];
   return pets
@@ -612,6 +638,7 @@ function normalizePets(pets) {
 }
 
 /** 按最新配置重建全部窗口（配置变更 / 显示器变化 / 重载） */
+/** @param {unknown} input */
 function rebuildWindows(input) {
   destroyWindows();
   const pets = normalizePets(input);
@@ -677,7 +704,9 @@ function installIpc() {
   ipcInstalled = true;
 
   // 宠物窗口跟随：renderer 逐帧上报窗口内容区位置/尺寸
-  ipcMain.on('pet:set-bounds', (event, bounds) => {
+  ipcMain.on('pet:set-bounds', (event, raw) => {
+    // 负载在桥上是 unknown：先断言成「带键的对象」，下面的 Number()/isFinite 才是真校验
+    const bounds = /** @type {IpcPayload} */ (raw);
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!win || win.isDestroyed()) return;
     const x = Number(bounds?.x);
@@ -728,7 +757,7 @@ function installIpc() {
     if (!win || win.isDestroyed()) return;
     const petId = [...windows.keys()].find((id) => windows.get(id) === win);
     if (!petId) return;
-    const s = state || {};
+    const s = /** @type {IpcPayload} */ (state || {});
     const x = Number(s.x);
     const y = Number(s.y);
     const vx = Number(s.vx);
@@ -740,7 +769,8 @@ function installIpc() {
   });
 
   // 碰撞结果转发：飞行方窗口检测到撞到 targetId → 把动量结果（目标新初速）转发给目标窗口
-  ipcMain.on('pet:collide-result', (event, payload) => {
+  ipcMain.on('pet:collide-result', (_event, raw) => {
+    const payload = /** @type {IpcPayload} */ (raw);
     const targetId = payload && typeof payload === 'object' ? String(payload.targetId || '') : '';
     const vx = Number(payload?.vx);
     const vy = Number(payload?.vy);
@@ -782,10 +812,12 @@ function installIpc() {
     inputBusy.set(win.id, !!busy);
   });
 
-  ipcMain.on('pet:input-regions', (event, input) => {
+  ipcMain.on('pet:input-regions', (event, raw) => {
     const win = BrowserWindow.fromWebContents(event.sender);
+    const input = /** @type {IpcPayload} */ (raw);
     if (!win || win.isDestroyed() || !input || !Array.isArray(input.rects)) return;
-    const rects = input.rects.filter(
+    // 每项形状在 filter 里逐个校验（类型断言只为读得到键，校验逻辑一个字没改）
+    const rects = /** @type {DshRect[]} */ (input.rects).filter(
       (r) => r && [r.x, r.y, r.width, r.height].every(Number.isFinite) && r.width > 0 && r.height > 0,
     );
     inputRegions.set(win.id, { dragging: input.dragging === true, rects });
@@ -795,6 +827,7 @@ function installIpc() {
   // 不建专属窗口——宠物窗口机制是透明小窗，不该承载常规网页浏览。URL 由渲染端从
   // 打开设置页：地址由宿主经 query 注入（ORIGIN = 本地服务 origin，端口变了自动跟随），
   // 这里只负责交给系统默认浏览器。
+  /** @param {string} url */
   const openSite = (url) => {
     shell.openExternal(url).catch((error) => {
       console.error('[dsh-pet-ng-desktop-helper] openExternal failed:', error);
@@ -802,7 +835,8 @@ function installIpc() {
   };
 
   // 右键「打开设置」：系统默认浏览器打开本地服务的设置页（同源，直接可用）。
-  ipcMain.on('pet:open-site', (event, payload) => {
+  ipcMain.on('pet:open-site', (_event, raw) => {
+    const payload = /** @type {IpcPayload} */ (raw);
     const url = payload && typeof payload === 'object' ? String(payload.url || '') : '';
     if (!/^https?:[/][/]/.test(url)) return;
     openSite(url);
@@ -818,6 +852,7 @@ function installDisplayWatcher() {
   if (displaysInstalled) return;
   displaysInstalled = true;
 
+  /** @type {ReturnType<typeof setTimeout> | null} */
   let displaysTimer = null;
   const pushDisplays = () => {
     const geo = deskGeometry();
@@ -909,18 +944,28 @@ function runStandalone() {
  * 菜单完全同一个组件、同一套样式），窗口尺寸与 zoomFactor 按 `uiScale` 补偿 —— 与设置窗同一套
  * 做法。窗口只在弹出时存在（第一次右键才建），失焦即隐藏。
  *
- * @param {{onAction?: (action: string) => void}} [options] 菜单项被点击时的回调（action 由调用方解释）
- * @returns {{show: (items: Array<object>) => void, hide: () => void, destroy: () => void}}
  */
 /** 托盘菜单的 IPC 只能注册一次（模块级，跨 createTrayMenu 调用共享） */
 let trayMenuIpcInstalled = false;
 
+/**
+ * 建一个自绘托盘菜单（Windows 的原生菜单不跟随 DPI 补偿，150% 屏上只有 2/3 大）。
+ *
+ * @param {{ onAction?: (action: string) => void }} [options] 菜单项被点击时的回调（action 由调用方解释）
+ * @returns {{
+ *   show: (items: Array<{ label: string, action?: string }>) => void,
+ *   hide: () => void,
+ *   destroy: () => void,
+ * }}
+ */
 function createTrayMenu(options = {}) {
   const onAction = typeof options.onAction === 'function' ? options.onAction : () => {};
   const scaleOf = () => resolveUiScale({ primaryScale: PRIMARY_SCALE, forcedScale: FORCED_SCALE }) || 1;
 
+  /** @type {import('electron').BrowserWindow | null} */
   let win = null;
-  /** 弹出时的光标位置：收到真实尺寸后按它重新摆（估算尺寸先占位） */
+  /** 弹出时的光标位置：收到真实尺寸后按它重新摆（估算尺寸先占位）
+   *  @type {import('electron').Point | null} */
   let anchor = null;
   /** 上一次的菜单尺寸（CSS 像素）；下次弹出先用它，避免闪一下再收缩 */
   let size = { width: 220, height: 240 };
@@ -929,6 +974,7 @@ function createTrayMenu(options = {}) {
   /** 弹出后这段时间内的 blur 一律忽略（实测抖动在 10ms 内，给 400ms 足够宽松） */
   const BLUR_GRACE_MS = 400;
 
+  /** @param {number} v */
   const toPhysical = (v) => Math.round(v * scaleOf());
 
   /** 按锚点摆窗口：菜单左下角贴光标（托盘在屏幕底部），越界夹回当前屏工作区 */
@@ -976,25 +1022,28 @@ function createTrayMenu(options = {}) {
      * **9ms 后 blur**，菜单刚出来就消失（用户报障："弹出菜单，但又立刻消失"）。
      * 所以弹出后一小段时间内的 blur 一律当激活抖动忽略，见 show() 里的 shownAt。
      */
-    win.on('blur', () => {
+    // 捕获成局部常量：win 是可变的外层变量（closed 时置 null），闭包里读它拿不到非空收窄
+    const self = win;
+    self.on('blur', () => {
       if (Date.now() - shownAt < BLUR_GRACE_MS) {
         // 抖动：把焦点要回来。只是"忽略"不够——窗口会停在失焦态，之后点别处也不会再有 blur，
         // 菜单就成了看得见却关不掉的幽灵（下面 show() 里的兜底会把它收掉，但那就又"消失"了）。
-        if (!win.isDestroyed()) win.focus();
+        if (!self.isDestroyed()) self.focus();
         return;
       }
       hide();
     });
-    win.on('closed', () => {
+    self.on('closed', () => {
       win = null;
     });
-    return win;
+    return self;
   }
 
   function hide() {
     if (win && !win.isDestroyed() && win.isVisible()) win.hide();
   }
 
+  /** @param {Array<{ label: string, action?: string }>} items */
   function show(items) {
     const target = ensureWindow();
     anchor = screen.getCursorScreenPoint();
@@ -1032,9 +1081,11 @@ function createTrayMenu(options = {}) {
   // IPC 只注册一次（createTrayMenu 可能被调用多次：托盘重建）
   if (!trayMenuIpcInstalled) {
     trayMenuIpcInstalled = true;
+    /** @param {import('electron').IpcMainEvent} event */
     const ownerOf = (event) => (win && !win.isDestroyed() && event.sender === win.webContents ? win : null);
-    ipcMain.on('pet:tray-size', (event, payload) => {
+    ipcMain.on('pet:tray-size', (event, raw) => {
       if (!ownerOf(event)) return;
+      const payload = /** @type {IpcPayload} */ (raw);
       const width = Number(payload && payload.width);
       const height = Number(payload && payload.height);
       if (!(width > 0 && height > 0)) return;
@@ -1045,9 +1096,10 @@ function createTrayMenu(options = {}) {
     ipcMain.on('pet:tray-close', (event) => {
       if (ownerOf(event)) hide();
     });
-    ipcMain.on('pet:tray-action', (event, payload) => {
+    ipcMain.on('pet:tray-action', (event, raw) => {
       if (!ownerOf(event)) return;
       hide();
+      const payload = /** @type {IpcPayload} */ (raw);
       const action = payload && typeof payload === 'object' ? String(payload.action || '') : '';
       if (action) onAction(action);
     });

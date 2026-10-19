@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * dsh-petNG desktop helper renderer —— 启动入口。
  *
@@ -20,11 +21,12 @@
  *   - 右键级联菜单（与浏览器共用同一份组件：树+渲染+样式来自 shared-core 的 menu 模块）：
  *     右键宠物弹出，桌面端工具根项「打开网站 / 打开 DeepSeek Harness（宿主是 DSH 桌面应用时的同一项）/ 查看余额 / 回到初始位置 / 重载配置」+ 动作点播；
  *     菜单开启期间整窗保持可交互（悬停菜单不触发穿透翻转），关闭/离开窗口即恢复穿透。
- *   - 系统通知不是宠物行为（浏览器半侧 notify.ts 负责），桌面端不重复实现。
+ *   - 系统通知不是宠物行为（浏览器侧 notify 负责，那份已随 overlay 移出本仓库），桌面端不重复实现。
  */
 'use strict';
 
 // ---------- 配置（大声报错；失败 5s 重试） ----------
+/** @param {string} message */
 function showError(message) {
   console.error('[dsh-petNG] ' + message);
   window.__dshPetDebug.configOk = false;
@@ -51,6 +53,11 @@ async function loadConfig() {
   const merged = await res.json();
   return {
     pets: S.flattenConfigPets(merged),
+    // 动画池与权重的**全局缺省**（主条目那一份）：宠物自带完整池时用不到，缺省时才回落。
+    // 与浏览器同一语义（pet.animations || 全局 animations）；拍平时已把条目级的吹进每只宠物，
+    // 这里再取一份是为了让"条目根本没配 animations"的情况有个明确来源，而不是一个不存在的变量。
+    animations: (merged && merged.main && merged.main.animations) || undefined,
+    animationWeights: (merged && merged.main && merged.main.animationWeights) || undefined,
     // 拖拽抛掷物理参数（顶层全局，所有宠物共用；合并器已填内置默认）
     physics: (merged && merged.main && merged.main.physics) || S.DEFAULT_PHYSICS,
     // 抛掷锁定在当前屏幕（根字段；合并器已填内置默认 false）
@@ -85,13 +92,16 @@ async function boot() {
       return;
     }
     for (const s of sprites) s.dispose();
-    sprites = [new PetSprite(pet)];
+    sprites = [new PetSprite(pet, cfg)];
     window.__dshPetDebug.configOk = true;
     window.__dshPetDebug.spriteCount = sprites.length;
     for (const s of sprites) s.playIdle();
     startLoops();
   } catch (e) {
-    showError('配置加载失败：' + (e && e.message ? String(e.message) : String(e)));
+    // 抛出的可能是 Error，也可能是别的带 message 的对象（宿主路由/浏览器 API 都这么干）：
+    // 有 message 就显示它，否则整体 String() 一下——绝不把有用信息吞成 "[object Object]"
+    const detail = e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e);
+    showError('配置加载失败：' + detail);
     scheduleReboot();
   }
 }
@@ -137,7 +147,9 @@ if (window.petBridge && window.petBridge.onDisplays) {
 // 那正好落在拖拽/飞行过程中，不设防就会看到宠物瞬间跳回上一个落点。
 window.addEventListener('resize', () => {
   for (const s of sprites) {
-    if (s.dragState.active || s.throwRef !== null || s.moveRef !== null) continue;
+    // drive 一栏盖住漫游/拖拽/抛掷三种；dragState.active 还要单独看——按下未过阈值时它已 true，
+    // 但位置驱动还没启动（drive 仍是 'none'）
+    if (s.dragState.active || S.driveOwnsPosition(s.drive)) continue;
     s.position();
   }
 });
