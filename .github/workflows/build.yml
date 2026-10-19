@@ -10,9 +10,6 @@ on:
 permissions:
   contents: read
 
-defaults:
-  run:
-
 jobs:
   # 质量门禁：类型、规范、单测、产物结构、接口文档对齐
   verify:
