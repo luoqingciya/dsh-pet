@@ -81,7 +81,7 @@ describe('flattenConfigPets —— 成品 → 渲染列表的唯一填充点', (
 
   test('源码守卫：host 写接口返回成品聚合，设置页的提交面必须完整', () => {
     const panel = readSource('../ui/pet-panel.tsx');
-    const host = readSource('../api/host.ts');
+    const host = readSource('../api/host.ts') + readSource('../api/router.ts');
 
     // ① 四个写/读接口都返回成品聚合——设置页拿响应直接刷新，不自己拼字段
     const returns = host.match(/obj: readAllConfig\(configPaths\)/g) ?? [];

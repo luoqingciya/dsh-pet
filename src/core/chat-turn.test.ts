@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url';
 /** 包内文件源码（守卫用；相对 src/core/ 解析） */
 const readSource = (rel: string): string => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
 
-const host = readSource('../api/host.ts');
+const host = readSource('../api/host.ts') + readSource('../api/router.ts');
 const appMain = readSource('../main/index.ts');
 const context = readSource('../main/context.ts');
 
@@ -46,7 +46,7 @@ describe('对话状态联动 —— turn 事件必须覆盖两条入口', () => 
     const block = /const handlePetRouteWithTurn = async[\s\S]*?\n {2}\};/.exec(host)?.[0] ?? '';
     assert.ok(block.length > 0, '必须能定位到 handlePetRouteWithTurn（守卫失效即无意义）');
     assert.ok(/method !== 'POST'/.test(block), '非 POST 不发 turn（GET /chat 是读历史）');
-    assert.ok(/\$\{ROUTE_PREFIX\}\/chat/.test(block), '只认 /chat 前缀');
+    assert.ok(/\$\{routePrefix\}\/chat/.test(block), '只认 /chat 前缀');
     assert.ok(/emitTurn\('turn\/start'\)/.test(block) && /emitTurn\('turn\/end'/.test(block), '起止都要发');
   });
 

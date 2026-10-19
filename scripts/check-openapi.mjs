@@ -2,7 +2,7 @@
 //   1. YAML 可解析
 //   2. 所有 $ref 都能解析到（悬空引用是文档类交付最常见的低级错误）
 //   3. 路径/操作/响应结构符合 OpenAPI 3.1 基本要求
-//   4. 文档里列出的每条路径都真实存在于 host 路由实现里（防止文档漂移）
+//   4. 文档里列出的每条路径都真实存在于 api/router.ts 的路由实现里（防止文档漂移）
 //
 // 路径一律从本文件位置解析（不依赖 CWD）：openapi.yaml 在仓库根，本文件在 dsh-pet-ng/scripts/。
 import { readFileSync } from 'node:fs';
@@ -15,7 +15,7 @@ const yaml = require('js-yaml');
 
 const HERE = dirname(fileURLToPath(import.meta.url)); // <仓库根>/scripts
 const SPEC_PATH = join(HERE, '..', 'openapi.yaml'); // 仓库根
-const HOST_SRC = join(HERE, '..', 'src', 'api', 'host.ts');
+const HOST_SRC = join(HERE, '..', 'src', 'api', 'router.ts');
 
 const doc = yaml.load(readFileSync(SPEC_PATH, 'utf8'));
 const fail = [];
