@@ -71,6 +71,7 @@ import {
 import { createAssetPaths } from '../core/assets';
 import { createMemoryStore } from '../core/memory-store';
 import { createWorkStatusPublisher } from '../core/work-status-publisher';
+import { createDesktopControl } from '../core/desktop-control';
 import { createNotifyPipeline, type Waterfall } from '../core/notify-pipeline';
 import { PollStateStore } from '../core/state';
 import { readBody, sendFile, sendJson, sendText } from '../core/http';
@@ -93,9 +94,6 @@ const ROUTE_PREFIX = '/dsh-pet-ng-7340';
 
 // 配置的读取/校验/合并/保存全部收敛在 ./config（readAllConfig / saveUserConfig，host 自包含实现，
 // 不 import src/shared —— 宿主跑在 Node、渲染端跑在浏览器上下文，避免把 DOM 代码拖进来）。本文件不再保留任何配置逻辑，只消费成品返回值。
-
-/** 该宠物是否参与桌面模式（Electron 透明窗） */
-const isDesktopVisible = (display: unknown): boolean => display === 'desktop' || display === 'both';
 
 // ---------------------------------------------------------------------------
 // 额外宠物（pet pack）说明：校验/扫描已收敛到 ./config（readAllConfig 内部逐字段合并），
@@ -332,50 +330,12 @@ export function apply(ctx: any): void {
     }
   };
 
-  let hasDesktopPet = false;
-  const refreshDesktop = (): void => {
-    hasDesktopPet = false;
-    try {
-      hasDesktopPet = effectivePetList().some((p) => isDesktopVisible(p.display));
-    } catch (e) {
-      ctx.logger?.warn?.(`[dsh-petNG] 宠物配置非法，桌面模式已跳过：${e instanceof Error ? e.message : String(e)}`);
-    }
-  };
-  refreshDesktop();
-
-  /** 桌面可见宠物列表（[{id,size}]）：应用据此决定开几个局部窗口（每宠物一个）。 */
-  const desktopPetList = (): Array<{ id: string; size: number }> => {
-    try {
-      return effectivePetList()
-        .filter((p) => isDesktopVisible(p.display))
-        .map((p) => ({ id: String(p.id), size: Number(p.size) }));
-    } catch {
-      return [];
-    }
-  };
-
-  /**
-   * 桌面窗口能力：由应用注入（`src/main/desktop.ts`）。
-   *
-   * 纯 Node 环境（单测、脚本）没有它 → 桌面宠物不可用，其余端点照常——这也是为什么它是
-   * **可选**能力而不是硬依赖：宿主的业务逻辑不该因为"没图形环境"而跑不起来。
-   */
-  const desktop = ctx.petDesktop as PetDesktop | undefined;
-
-  let disposed = false;
-  let desktopRunning = false;
-  let startRetryTimer: NodeJS.Timeout | undefined;
-
-  /**
-   * 渲染端的一次请求 → 宿主路由结果。
-   *
-   * 与 HTTP 路由**同一个** handlePetRoute：桌面窗口看到的配置/状态/素材与第三方脚本拉到的
-   * 完全一致，不存在"两套语义慢慢漂移"。素材走文件绝对路径，二进制不过 JSON。
-   */
+  // 桌面窗口生命周期（refresh / start / stop / sync）收在 core/desktop-control。
+  // 与路由层是双向依赖：这里传 handleRequest 进去，路由那边把 sync 传回来——两边都用延迟回调解开。
+  /** 渲染端请求 → 路由结果：与 HTTP 路由同一份实现，只是把 RouteResult 翻成 DesktopResponse */
   const desktopRequest = async (req: DesktopRequest): Promise<DesktopResponse> => {
     const result = await handlePetRouteWithTurn(req.url, req.method, req.body);
     if (result.kind === 'file') {
-      // file 分支恒 200（404/400 已由 text 分支表达）
       return { status: 200, contentType: result.contentType, file: result.file };
     }
     if (result.kind === 'text') {
@@ -388,68 +348,16 @@ export function apply(ctx: any): void {
     };
   };
 
-  /** 按当前配置把桌面窗口开出来（没有桌面能力 / 无可见宠物时什么都不做） */
-  const startDesktop = (): void => {
-    if (disposed || !desktop || desktopRunning) return;
-    if (!hasDesktopPet) return; // 没有任何宠物 display 含 desktop/both：不开窗口
-    const port = typeof ctx.webServer?.port === 'number' ? ctx.webServer.port : 0;
-    if (!port || port <= 0) {
-      // 服务可能尚未完成监听（OS 分配端口时 port 短暂为 0）：延迟重试。
-      if (!startRetryTimer) {
-        startRetryTimer = setTimeout(() => {
-          startRetryTimer = undefined;
-          startDesktop();
-        }, 500);
-        startRetryTimer.unref?.();
-      }
-      return;
-    }
-    const configUrl = `http://127.0.0.1:${port}${ROUTE_PREFIX}/config`;
-    try {
-      const count = desktop.start({ pets: desktopPetList(), configUrl, request: desktopRequest });
-      desktopRunning = count > 0;
-      ctx.logger?.info?.(`dsh-petNG 桌面窗口已就绪：${count} 个`);
-    } catch (e) {
-      desktopRunning = false;
-      ctx.logger?.warn?.(`dsh-petNG 桌面窗口创建失败：${e instanceof Error ? e.message : String(e)}`);
-    }
-  };
-
-  /** 销毁全部桌面窗口（保留配置，可再次拉起） */
-  const stopDesktop = (reason = 'settings-change'): void => {
-    if (startRetryTimer) {
-      clearTimeout(startRetryTimer);
-      startRetryTimer = undefined;
-    }
-    if (!desktopRunning) return;
-    desktopRunning = false;
-    ctx.logger?.debug?.(`dsh-petNG 桌面窗口关闭（${reason}）`);
-    desktop?.stop();
-  };
-
-  /**
-   * 宠物配置（display / size 等）变更后：重解析桌面宠物并**重建全部窗口**。
-   *
-   * 合并进程前这里要「等旧 helper 真正退出再 spawn 新的」（issue #64：旧窗口还没消失、新窗口
-   * 已经画出来，用户看到两只宠物）。现在销毁是同步的，`stop()` 返回时窗口已经没了，不需要等待，
-   * 也就没有重叠的可能。
-   *
-   * 队列保留：连续保存会触发多次重建，串行化让"最后一次配置"一定最后生效，
-   * 也避免中间态被并发打乱。队列自身绝不留下 rejected 状态，否则后续保存再也不会重建。
-   */
-  let desktopSyncQueue: Promise<void> = Promise.resolve();
-  const syncDesktop = (): Promise<void> => {
-    desktopSyncQueue = desktopSyncQueue
-      .then(async () => {
-        refreshDesktop();
-        stopDesktop('desktop-config-change');
-        startDesktop();
-      })
-      .catch((e: unknown) => {
-        ctx.logger?.warn?.(`[dsh-petNG] 重建桌面窗口失败：${e instanceof Error ? e.message : String(e)}`);
-      });
-    return desktopSyncQueue;
-  };
+  const desktopControl = createDesktopControl({
+    desktop: ctx.petDesktop as PetDesktop | undefined,
+    resolvePort: () => (typeof ctx.webServer?.port === 'number' ? ctx.webServer.port : 0),
+    routePrefix: ROUTE_PREFIX,
+    handleRequest: desktopRequest,
+    listPets: effectivePetList,
+    logger: ctx.logger,
+  });
+  const startDesktop = desktopControl.start;
+  const syncDesktop = desktopControl.sync;
 
   /** 单次业务路由（HTTP 请求与桌面窗口的 scheme 请求共用同一份实现）：
    *  输入只需 rawUrl(/dsh-pet-ng-7340/... + 查询) + method + body 文本；返回 RouteResult(JSON/文本/文件)，
@@ -694,9 +602,8 @@ export function apply(ctx: any): void {
 
   // 随宿主生命周期清理：销毁全部桌面窗口
   ctx.effect(() => () => {
-    disposed = true;
     workStatusPublisher.dispose();
-    stopDesktop('host-dispose');
+    desktopControl.dispose();
   });
 
   // 路由就绪后把桌面窗口开出来（无桌面能力 / 无可见宠物时静默跳过）

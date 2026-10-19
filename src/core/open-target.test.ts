@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 /** 包内文件源码（守卫用；相对 src/core/ 解析） */
 const readSource = (rel: string): string => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
 
-const host = readSource('../api/host.ts') + readSource('../api/router.ts');
+const host = readSource('../api/host.ts') + readSource('../api/router.ts') + readSource('../core/desktop-control.ts');
 const main = readSource('../../runtime/electron-helper/windows.js');
 const preload = readSource('../../runtime/electron-helper/preload.js');
 const sprite = readSource('../../runtime/electron-helper/sprite.js');
@@ -24,11 +24,11 @@ const sprite = readSource('../../runtime/electron-helper/sprite.js');
 describe('右键「打开设置」', () => {
   test('宿主：只交配置地址，不再有宿主形态 / 令牌相关变量', () => {
     assert.ok(
-      /const configUrl = `http:\/\/127\.0\.0\.1:\$\{port\}\$\{ROUTE_PREFIX\}\/config`/.test(host),
+      /const configUrl = `http:\/\/127\.0\.0\.1:\$\{port\}\$\{routePrefix\}\/config`/.test(host),
       '宿主必须按「本地服务 origin + 路由前缀」拼出 configUrl（渲染端的 ORIGIN 由它推导）',
     );
     assert.ok(
-      /desktop\.start\(\{ pets: desktopPetList\(\), configUrl, request: desktopRequest \}\)/.test(host),
+      /desktop\.start\(\{ pets: pets\(\), configUrl, request: handleRequest \}\)/.test(host),
       'configUrl 必须交给桌面窗口层（漏传则渲染端拿不到地址，宠物窗口空白）',
     );
     for (const name of ['DSH_PET_OPEN_TARGET', 'DSH_PET_SITE_URL']) {

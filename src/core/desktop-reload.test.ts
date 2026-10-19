@@ -26,7 +26,7 @@ import { fileURLToPath } from 'node:url';
 /** 包内文件源码（守卫用；相对 src/core/ 解析） */
 const readSource = (rel: string): string => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
 
-const host = readSource('../api/host.ts') + readSource('../api/router.ts');
+const host = readSource('../api/host.ts') + readSource('../api/router.ts') + readSource('../core/desktop-control.ts');
 const sprite = readSource('../../runtime/electron-helper/sprite.js');
 const menu = readSource('../shared/menu.ts');
 
@@ -61,7 +61,7 @@ describe('桌面端「重载配置」—— 菜单 → 宿主重建窗口', () =
   });
 
   test('重建走的是「先 stop 再 start」，不再有跨进程等待', () => {
-    assert.ok(/stopDesktop\('desktop-config-change'\)/.test(host), 'syncDesktop 必须先销毁旧窗口');
+    assert.ok(/stop\('desktop-config-change'\)/.test(host), 'syncDesktop 必须先销毁旧窗口');
     assert.ok(/startDesktop\(\)/.test(host), 'syncDesktop 必须再按最新配置建窗');
     assert.ok(!/stopHelperAndWait|HelperProcess/.test(host), '跨进程的停/等/起链路应已整体移除');
   });
