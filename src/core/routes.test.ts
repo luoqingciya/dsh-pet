@@ -6,7 +6,7 @@
  * 于是 `..\..\` 能越出用户根读盘；它挂了 2.5 周才被外部贡献者发现（PR #53）。本文件把这条不变式钉在
  * **handler 这一层**（而不是只测纯函数），防的就是"以后又有人新写一段手拼路径"。
  *
- * 直接 import 源码（`./index.ts`）而不是 `lib/` 构建产物：测试不依赖 `npm run build`（lib/ 不入库）。
+ * 直接 import 源码（`../api/host.ts`）而不是 `lib/` 构建产物：测试不依赖 `npm run build`（lib/ 不入库）。
  * 代价：源码形态下模块内的 PACKAGE_ROOT 解析为 `<pkg>/src`，包内 assets 不可达，故本文件只覆盖 thumb
  * 路由；`/config` 的成品契约由 shared/config.test.ts 的守卫与端到端脚本覆盖。
  *
@@ -19,7 +19,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Writable } from 'node:stream';
 
-import { apply } from './index.ts';
+import { apply } from '../api/host.ts';
 
 /** 用户根之外的诱饵内容：任何响应体出现它都说明越根读盘成功 */
 const SECRET = 'TOP-SECRET-BYTES';

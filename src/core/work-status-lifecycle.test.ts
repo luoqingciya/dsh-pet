@@ -17,7 +17,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Writable } from 'node:stream';
 
-import { apply } from './index.ts';
+import { apply } from '../api/host.ts';
 
 /** 工作状态快照（= S 里 sections.workStatus 的 data；ts 已由叶子 counter 取代，不再出现） */
 type Snapshot = { state: string | null; task: string | null };

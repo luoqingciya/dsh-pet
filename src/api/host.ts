@@ -47,15 +47,15 @@ import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { resolveDshHome } from './standalone/home-paths';
-import { credentialRef } from './standalone/credentials';
-import { queryBalance } from './balance/index';
-import { generateWhisper } from './whisper';
-import { generateChat, type ChatMemoryMessage } from './chat';
-import { configuredModel } from './model-selection';
-import { limitPool, pickMeme, readMemePool } from './memes';
-import { decideBroadcast, normalizeBroadcastText } from './broadcast';
-import { decideAnim } from './anim';
+import { resolveDshHome } from '../core/standalone/home-paths';
+import { credentialRef } from '../core/standalone/credentials';
+import { queryBalance } from '../core/balance/index';
+import { generateWhisper } from '../core/whisper';
+import { generateChat, type ChatMemoryMessage } from '../core/chat';
+import { configuredModel } from '../core/model-selection';
+import { limitPool, pickMeme, readMemePool } from '../core/memes';
+import { decideBroadcast, normalizeBroadcastText } from '../core/broadcast';
+import { decideAnim } from '../core/anim';
 import {
   configVersion,
   findPetInstance,
@@ -71,7 +71,7 @@ import {
   syncUserConfigFromDefault,
   userConfigUnparsable,
   type ConfigPaths,
-} from './config';
+} from '../core/config';
 import {
   EXTERNAL_STATUS_SESSION,
   WorkStatusStore,
@@ -79,7 +79,7 @@ import {
   parseExternalWorkStatus,
   reduceWorkStatus,
   type ExternalWorkStatusInput,
-} from './work-status';
+} from '../core/work-status';
 import {
   agentErrorFrame,
   hasBlockingActivity,
@@ -88,9 +88,9 @@ import {
   sessionIdOf,
   shouldNotifySession,
   type HostNotifyFrame,
-} from './notify-events';
-import { createAssetPaths } from './assets';
-import { PollStateStore } from './state';
+} from '../core/notify-events';
+import { createAssetPaths } from '../core/assets';
+import { PollStateStore } from '../core/state';
 import {
   mimeOf,
   readBody,
@@ -100,9 +100,9 @@ import {
   sendJson,
   sendText,
   type RouteResult,
-} from './http';
-import { petSystemPrompt, withTimeContext } from './prompt';
-import type { DesktopRequest, DesktopResponse, PetDesktop } from './desktop-api';
+} from '../core/http';
+import { petSystemPrompt, withTimeContext } from '../core/prompt';
+import type { DesktopRequest, DesktopResponse, PetDesktop } from '../core/desktop-api';
 
 /** 插件行 id（与 cordis.patch.yml 一致） */
 export const name = 'pet';

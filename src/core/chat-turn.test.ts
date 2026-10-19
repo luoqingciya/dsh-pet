@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url';
 /** 包内文件源码（守卫用；相对 src/core/ 解析） */
 const readSource = (rel: string): string => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
 
-const host = readSource('./index.ts');
+const host = readSource('../api/host.ts');
 const appMain = readSource('../main/index.ts');
 const context = readSource('../main/context.ts');
 

@@ -28,7 +28,7 @@ import {
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 
-import { apply } from '../core/index';
+import { apply } from '../api/host';
 import { createDesktopService, createTrayMenuService, prepareDesktopRuntime, reportPrimaryScale } from './desktop';
 import { listenAppServer } from './server';
 import type { RegisteredRoute } from './server';
