@@ -69,15 +69,14 @@ import {
 } from '../core/work-status';
 import {
   agentErrorFrame,
-  hasBlockingActivity,
   isCompletionTurnEnd,
   reduceNotifyFrame,
   sessionIdOf,
   shouldNotifySession,
-  type HostNotifyFrame,
 } from '../core/notify-events';
 import { createAssetPaths } from '../core/assets';
 import { createMemoryStore } from '../core/memory-store';
+import { createNotifyPipeline, type Waterfall } from '../core/notify-pipeline';
 import { PollStateStore } from '../core/state';
 import { readBody, sendFile, sendJson, sendText } from '../core/http';
 import { petSystemPrompt, withTimeContext } from '../core/prompt';
@@ -205,77 +204,13 @@ export function apply(ctx: any): void {
   // 弹原生通知（见 src/main/notifications.ts）。
   // **单槽**（后到覆盖先到）：同一秒来多条只弹最后一条。这是有意的取舍——1 秒内连弹多个系统通知
   // 本身没有意义（反而更烦），所以不再带 seq / 增量帧队列（改造前的 frames 数组机制已删）。
-  const pushNotifyFrame = (frame: HostNotifyFrame): void => {
-    state.writeSection('notify', frame);
-  }; /** 每会话 turn 级标志（goal 续跑轮判定；不参与展示，仅修正 turn/end 终局语义） */
-  /** 终态（success/error）展示窗口定时器：约 60s 后清掉该会话条目，陈旧完成态不再浮上来（Bug 2/3） */
-  const terminalTimers = new Map<string, ReturnType<typeof setTimeout>>();
-  const TERMINAL_KEEP_MS = 60 * 1000;
-  /** 取消某会话待执行的终态清理：会话已回到非终态，那次清理到点后既不清理也不重排，留着只会误导 */
-  const cancelTerminalCleanup = (sessionId: string): void => {
-    const t = terminalTimers.get(sessionId);
-    if (t === undefined) return;
-    clearTimeout(t);
-    terminalTimers.delete(sessionId);
-  };
-  /** 排一个终态清理定时器（每会话一个，已排则跳过） */
-  const scheduleTerminalCleanup = (sessionId: string): void => {
-    if (terminalTimers.has(sessionId)) return;
-    const t = setTimeout(() => {
-      terminalTimers.delete(sessionId);
-      const sessionState = workStatus.stateOf(sessionId);
-      if (sessionState === 'success' || sessionState === 'error') {
-        workStatus.clear(sessionId); // 条目连同它的任务详情文案一起消失，不残留到后续活动
-        publishWorkStatus(); // 清完要写 S：否则前端一直挂着那条陈旧完成态
-      }
-    }, TERMINAL_KEEP_MS);
-    terminalTimers.set(sessionId, t);
-  };
-  // 通知活动门（issue #114）：「对话完成」不立刻弹，先挂起，到点确认这条会话确实没活了再弹
-  // （在跑的下属子代理 / 团队成员、后台任务、活跃提醒任一非空 → 丢弃这一帧）。
-  //
-  // 为什么必须延迟而不是同步查：`workspace/session-activity` 的 turn 族读的是**活 Agent 的
-  // status**，而 turn/end 是在回合体的 finally 里追加的——同步那一刻它自己还是 running，判据必然
-  // 非空，照「任一非空就不弹」写会把每一条通知都吞掉（详见 notify-events.ts 的 hasBlockingActivity）。
-  // 延迟同时让「成员刚变 idle、Lead 下一秒 send_message 又把它唤醒」的窗口过去（队友邮箱是入队后
-  // 立刻投递、空闲目标会起一轮）。
-  //
-  // 判据不可用（宿主没组合 workspace、standalone 伪 ctx 没有 waterfall、调用抛错、返回值形状不对）
-  // → 一律放行：宁可多弹一条，也不能让通知被一次宿主变更整体打哑。
-  const NOTIFY_ACTIVITY_DELAY_MS = 1500;
-  /** 每会话一个待查定时器（同会话连续收尾只保留最后一次：后到覆盖先到，与单槽帧同语义） */
-  const notifyActivityTimers = new Map<string, ReturnType<typeof setTimeout>>();
-  /** waterfall 只用到签名本身：DSH 未导出该事件的请求/响应类型，这里宽松声明（与 ctx 同为 any 的现状一致） */
-  type Waterfall = (name: string, request: unknown, next: () => Promise<unknown[]>) => Promise<unknown>;
-  /** 这条会话是否还有在跑的活；判据不可用一律 false＝放行 */
-  const sessionHasRunningWork = async (sessionId: string): Promise<boolean> => {
-    const waterfall = (ctx as { waterfall?: Waterfall }).waterfall;
-    if (typeof waterfall !== 'function') return false;
-    try {
-      const activity = await waterfall.call(ctx, 'workspace/session-activity', { sessionId }, () =>
-        Promise.resolve([]),
-      );
-      return hasBlockingActivity(activity);
-    } catch {
-      return false; // 查询失败不阻塞通知（与「判据不可用时放行」同一策略）
-    }
-  };
-  /** 排一个活动门定时器：到点确认空闲才推这一帧 */
-  const scheduleCompletionNotify = (sessionId: string, event: unknown): void => {
-    const prev = notifyActivityTimers.get(sessionId);
-    if (prev !== undefined) clearTimeout(prev);
-    notifyActivityTimers.set(
-      sessionId,
-      setTimeout(() => {
-        notifyActivityTimers.delete(sessionId);
-        void (async () => {
-          if (await sessionHasRunningWork(sessionId)) return; // 还有活：等真正的收尾轮再弹
-          const frame = reduceNotifyFrame(event as Parameters<typeof reduceNotifyFrame>[0]);
-          if (frame) pushNotifyFrame(frame);
-        })();
-      }, NOTIFY_ACTIVITY_DELAY_MS),
-    );
-  };
+  // 通知帧管道（单槽推帧 / 终态清理 / 活动门）收在 core/notify-pipeline
+  const notify = createNotifyPipeline({
+    writeFrame: (frame) => state.writeSection('notify', frame),
+    workStatus,
+    publishWorkStatus,
+    waterfall: (ctx as { waterfall?: Waterfall }).waterfall,
+  });
   // 碎碎念周期调度的「上次生成时刻」（按宠物）：调度拍据此判断到没到点。
   // 改造前这份节流靠 whisperCache（缓存 + ts 比较），现在"该不该生成"由调度侧决定、
   // "生成结果"直接写 S——多端共享同一句由 S 天然保证，不再需要第二份缓存。
@@ -661,7 +596,7 @@ export function apply(ctx: any): void {
         // turn/end 的 null（aborted / 未知 kind）＝该会话回合已结束：清掉会话状态，让展示回到空闲或
         // 落到其他活跃会话，防止回合被打断后永久卡在上一档；其他事件的 null 是"不关心"，忽略。
         if (type === 'turn/end') {
-          cancelTerminalCleanup(sessionId); // 条目都要清了，别留一个到点后无事可做的定时器
+          notify.cancelTerminal(sessionId); // 条目都要清了，别留一个到点后无事可做的定时器
           workStatus.clear(sessionId); // 条目连同任务详情文案一起消失（clear 内部会重算展示）
           publishWorkStatus(); // 回合被打断 → 回到空闲：前端据此收起常驻气泡
         }
@@ -680,13 +615,11 @@ export function apply(ctx: any): void {
       // 终态只展示短暂窗口后自动清理：陈旧完成态不再浮上来（Bug 3 的一环，顺带缓解 Bug 2 残留）。
       // 回到非终态则取消那次待执行的清理——否则它到点时会话已非终态，既不清也不重排，
       // 条目（连同旧任务文案）就永久留下了。
-      if (next === 'success' || next === 'error') scheduleTerminalCleanup(sessionId);
-      else cancelTerminalCleanup(sessionId);
+      notify.onTerminalState(sessionId, next);
     });
     return () => {
       dispose();
-      for (const t of terminalTimers.values()) clearTimeout(t);
-      terminalTimers.clear();
+      notify.dispose();
     };
   }, 'dsh-petNG: work-status session events');
 
@@ -711,11 +644,11 @@ export function apply(ctx: any): void {
         // 这一轮结束 ≠ 团队收工，成员还在跑时弹「对话完成」是误报。生成失败/输出截断、权限申请、
         // 用户选择不过这道门，直接放行（理由见 notify-events.ts 的 isCompletionTurnEnd）。
         if (isCompletionTurnEnd(event)) {
-          scheduleCompletionNotify(sessionIdOf(session), event);
+          notify.scheduleCompletion(sessionIdOf(session), event);
           return;
         }
         const frame = reduceNotifyFrame(event as Parameters<typeof reduceNotifyFrame>[0]);
-        if (frame) pushNotifyFrame(frame);
+        if (frame) notify.pushFrame(frame);
       },
     );
     // agent/error（agent-loop dispatch.emit）：无回合位置的生成失败；0.1.5 新增，
@@ -725,13 +658,12 @@ export function apply(ctx: any): void {
       'agent/error',
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (payload: any) => {
-        pushNotifyFrame(agentErrorFrame(payload?.error));
+        notify.pushFrame(agentErrorFrame(payload?.error));
       },
     );
     return () => {
       // 卸载时清掉待查的定时器：否则插件已卸载，到点还去写一次 S
-      for (const t of notifyActivityTimers.values()) clearTimeout(t);
-      notifyActivityTimers.clear();
+      notify.dispose();
       sessionDispose();
       errorDispose();
     };
