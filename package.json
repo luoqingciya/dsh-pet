@@ -69,7 +69,8 @@
     "app": "npm run bundle && npm run build:desktop-core && node lib/app-launch.js",
     "app:package": "node scripts/package-app.mjs",
     "app:smoke": "node scripts/app-smoke.mjs",
-    "app:installer": "node scripts/package-installer.mjs"
+    "app:installer": "node scripts/package-installer.mjs",
+    "check:layers": "node scripts/check-layers.js"
   },
   "license": "MIT",
   "engines": {

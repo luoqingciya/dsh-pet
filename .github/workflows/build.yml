@@ -27,6 +27,7 @@ jobs:
       - run: npm run lint
       - run: npm run format:check
       - run: npm test
+      - run: npm run check:layers
       - run: node scripts/prepack-check.js
       - run: npm run check:openapi
 
