@@ -17,7 +17,7 @@
  *   node scripts/package-smoke.mjs --dir <unpacked 目录> --port 7399
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -48,7 +48,10 @@ if (!existsSync(exe)) {
 }
 
 /** 产物自带的数据目录（应用强制 userData = <安装目录>/data/electron，日志在 data/app.log） */
-const logFile = join(dir, 'data', 'app.log');
+const dataDir = join(dir, 'data');
+const logFile = join(dataDir, 'app.log');
+/** 启动前就存在的 data/：本地反复跑时不要动它 */
+const hadData = existsSync(dataDir);
 
 function tailLog(n = 25) {
   try {
@@ -114,8 +117,43 @@ function kill() {
   }
 }
 
+/**
+ * 等进程**真的**退出。
+ *
+ * `taskkill` 只是发信号并返回；Windows 释放文件句柄还要一会儿。CI 上紧接着的一步是
+ * `Rename-Item dist/dsh-pet-ng-app`，句柄没放开就报 `Access to the path ... is denied`
+ * （1.0.2 之后第一次跑 CI 就是这么挂的）。
+ */
+async function waitForExit(ms = 15000) {
+  const deadline = Date.now() + ms;
+  while (!exited && Date.now() < deadline) await sleep(100);
+  await sleep(500); // 再给文件系统一点时间
+}
+
+/**
+ * 清掉冒烟过程中生成的 `data/`。
+ *
+ * 应用会把 userData 与配置写在**产物目录自己**的 `data/` 下（这是它的设计：数据跟着程序走）。
+ * 冒烟跑过之后如果不清理，压缩包里就会带上 CI 的日志与一份预置配置——用户解压即"已初始化"。
+ * 本来就有 `data/` 的（本地反复跑）不动它。
+ */
+async function cleanupData() {
+  if (hadData) return;
+  for (let i = 0; i < 8; i += 1) {
+    try {
+      rmSync(dataDir, { recursive: true, force: true });
+      return;
+    } catch {
+      await sleep(300); // 句柄还没放开，稍等重试
+    }
+  }
+  console.warn('[package-smoke] 警告：没能清掉冒烟生成的 data/（不影响功能，但会混进压缩包）');
+}
+
 const result = await waitHealthy();
 kill();
+await waitForExit();
+await cleanupData();
 
 if (!result.ok) {
   console.error(`[package-smoke] FAIL: ${result.reason}`);

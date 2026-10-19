@@ -144,40 +144,40 @@ Windows 直接双击仓库里的 `dsh-pet-ng.cmd`；macOS / Linux 运行 `./dsh-
 **待机 / 移动**
 
 <p>
-  <img src="dsh-pet-ng/assets/preview/daiji-huxi-xiuxian.gif" width="150" alt="待机呼吸">
-  <img src="dsh-pet-ng/assets/preview/dongzhangxiwang.gif" width="150" alt="东张西望">
-  <img src="dsh-pet-ng/assets/preview/pangxie-zoulu.gif" width="150" alt="螃蟹走路">
+  <img src="assets/preview/daiji-huxi-xiuxian.gif" width="150" alt="待机呼吸">
+  <img src="assets/preview/dongzhangxiwang.gif" width="150" alt="东张西望">
+  <img src="assets/preview/pangxie-zoulu.gif" width="150" alt="螃蟹走路">
 </p>
 
 **小动作 / 玩耍**
 
 <p>
-  <img src="dsh-pet-ng/assets/preview/chaoda-shenlanyao.gif" width="150" alt="超大伸懒腰">
-  <img src="dsh-pet-ng/assets/preview/xie-daima.gif" width="150" alt="写代码">
-  <img src="dsh-pet-ng/assets/preview/yuandi-zhuanxin-wan-mofang.gif" width="150" alt="玩魔方">
-  <img src="dsh-pet-ng/assets/preview/lu-mao.gif" width="150" alt="撸猫">
+  <img src="assets/preview/chaoda-shenlanyao.gif" width="150" alt="超大伸懒腰">
+  <img src="assets/preview/xie-daima.gif" width="150" alt="写代码">
+  <img src="assets/preview/yuandi-zhuanxin-wan-mofang.gif" width="150" alt="玩魔方">
+  <img src="assets/preview/lu-mao.gif" width="150" alt="撸猫">
 </p>
 
 **吃什么 / 时节**
 
 <p>
-  <img src="dsh-pet-ng/assets/preview/shuan-huoguo.gif" width="150" alt="涮火锅">
-  <img src="dsh-pet-ng/assets/preview/chi-token.gif" width="150" alt="吃 Token">
-  <img src="dsh-pet-ng/assets/preview/duixueren.gif" width="150" alt="堆雪人">
-  <img src="dsh-pet-ng/assets/preview/fang-yanhua.gif" width="150" alt="放烟花">
+  <img src="assets/preview/shuan-huoguo.gif" width="150" alt="涮火锅">
+  <img src="assets/preview/chi-token.gif" width="150" alt="吃 Token">
+  <img src="assets/preview/duixueren.gif" width="150" alt="堆雪人">
+  <img src="assets/preview/fang-yanhua.gif" width="150" alt="放烟花">
 </p>
 
 **交互与状态**
 
 <p>
-  <img src="dsh-pet-ng/assets/preview/dianji-huiying-kaixin-yuedong.gif" width="150" alt="点击回应">
-  <img src="dsh-pet-ng/assets/preview/beishubiao-tuozhuai-xuankong-fankui.gif" width="150" alt="拖拽悬空">
-  <img src="dsh-pet-ng/assets/preview/qian-dai-man-yi.gif" width="150" alt="余额-钱袋满溢">
-  <img src="dsh-pet-ng/assets/preview/suisuinian-fadai-suisuinian.gif" width="150" alt="碎碎念">
-  <img src="dsh-pet-ng/assets/preview/gongzuozhuangtai-sikao-maopao.gif" width="150" alt="工作状态-思考">
+  <img src="assets/preview/dianji-huiying-kaixin-yuedong.gif" width="150" alt="点击回应">
+  <img src="assets/preview/beishubiao-tuozhuai-xuankong-fankui.gif" width="150" alt="拖拽悬空">
+  <img src="assets/preview/qian-dai-man-yi.gif" width="150" alt="余额-钱袋满溢">
+  <img src="assets/preview/suisuinian-fadai-suisuinian.gif" width="150" alt="碎碎念">
+  <img src="assets/preview/gongzuozhuangtai-sikao-maopao.gif" width="150" alt="工作状态-思考">
 </p>
 
-全部 106 段动画见 `dsh-pet-ng/assets/preview/`（GIF 仅作展示；实际播放用同名的透明 webm）。
+全部 106 段动画见 `assets/preview/`（GIF 仅作展示；实际播放用同名的透明 webm）。
 
 ---
 
@@ -350,7 +350,7 @@ DSH 的包名（`npm run prepack` 会扫描产物，混进 `@deepseek-ai/*` 直�
 
 1. 按 `prompts/桌面宠物 10 秒动作提示词.md` 的配方，用任意视频模型生成 10 秒绿幕视频（16:9，纯绿幕）
 2. `scripts/` 里的 Python 管线：水印遮罩 → 绿幕抠像（或 PR 手工抠像）→ 归一化 → 转码 640×360 VP9-alpha
-3. 产物放进 `dsh-pet-ng/assets/webm/`，再在 `config.jsonc` 的 `animations` 里登记名字
+3. 产物放进 `assets/webm/`，再在 `config.jsonc` 的 `animations` 里登记名字
 
 源视频体积大，不随仓库发布（本仓库的 Release 只提供程序包，不含源视频）——自己生成即可，生成链脚本与提示词都在仓库里。
 
