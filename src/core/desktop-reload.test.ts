@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url';
 const readSource = (rel: string): string => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
 
 const host = readSource('../api/host.ts') + readSource('../api/router.ts') + readSource('../core/desktop-control.ts');
-const sprite = readSource('../../runtime/electron-helper/sprite.js');
+const sprite = readSource('../../src/desktop/sprite.js');
 const menu = readSource('../shared/menu.ts');
 
 describe('桌面端「重载配置」—— 菜单 → 宿主重建窗口', () => {

@@ -41,7 +41,6 @@
     "lib",
     "src",
     "assets/webm",
-    "runtime/electron-helper",
     "assets/fonts",
     "assets/pic",
     "assets/memes",

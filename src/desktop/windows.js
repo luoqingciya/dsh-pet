@@ -1,7 +1,7 @@
 /**
  * dsh-petNG 桌面窗口层 —— 透明置顶小窗的创建与维护（**跑在应用主进程里**，不是独立进程）。
  *
- * 历史：这原本是 `runtime/electron-helper/main.js`，一个由宿主 spawn 的独立 Electron 进程，
+ * 历史：这原本是 `src/desktop/main.js`，一个由宿主 spawn 的独立 Electron 进程，
  * 渲染端经 stdout JSON 行协议 + 本地 HTTP 回调把请求转给宿主（bridge）。合并成一个进程后：
  *   - 请求不再过管道：`dsh-pet-ng-bridge://` 的 protocol.handle **直接调宿主注入的处理函数**
  *     （宿主侧就是 handlePetRoute，与 HTTP 路由同一份实现，语义零变化）；
@@ -168,7 +168,7 @@ function probePrimaryScale() {
     windowsHide: true,
     stdio: ['ignore', 'pipe', 'pipe'],
   };
-  let out = '';
+  let out;
   try {
     out = execFileSync(cmd.command, cmd.args, opts);
   } catch (e) {
@@ -484,7 +484,7 @@ function createPetWindows(pets, geo) {
     });
     win
       // **必须用绝对路径**：`loadFile('index.html')` 是相对 **appPath** 解析的。
-      // 开发态 appPath = 本脚本所在目录（runtime/electron-helper），相对路径恰好能用；
+      // 开发态 appPath = 本脚本所在目录（src/desktop），相对路径恰好能用；
       // 但打包后 Helper 与主进程共用同一个 exe，appPath 变成 `resources/app`，
       // 相对路径就去找 `resources/app/index.html`（不存在）→ ERR_FILE_NOT_FOUND，
       // 窗口创建了却永远不显示（表现为"只有设置页，没有宠物"）。
@@ -868,7 +868,7 @@ function reportPrimaryScale() {
 // ---------- 独立开发/测试入口（不经应用壳，直接起一套窗口） ----------
 
 /**
- * 只在 `node runtime/electron-helper/windows.js`（由 Electron 执行）时走这里：
+ * 只在 `node src/desktop/windows.js`（由 Electron 执行）时走这里：
  * 从环境变量读宠物列表与配置地址，不注册 bridge（渲染端直连 HTTP）。
  * 用途：对着 mock 服务的 macOS 桌面几何测试（scripts/tests/desktop-macos.test.mjs）、
  * 以及开发时单独调窗口层。

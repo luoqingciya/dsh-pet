@@ -3,7 +3,7 @@
  *
  * 背景：animations / animationWeights / eventsRefreshSec / physics / confineToScreen / workStatusTexts /
  * whisperModel / chatModel 这八个条目级字段必须由 flattenConfigPets 从「条目」吹进每只实例。
- * 桌面渲染端（runtime/electron-helper 的 sprite.js）读的就是拍平后的列表：漏掉 physics，
+ * 桌面渲染端（src/desktop 的 sprite.js）读的就是拍平后的列表：漏掉 physics，
  * 拖拽跟手第一帧读 cfg.physics.throwPower 会直接抛错（表现为宠物完全拖不动）。
  *
  * 本文件钉住两件事：

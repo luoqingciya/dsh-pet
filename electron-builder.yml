@@ -5,7 +5,7 @@
 # 自己实现不划算。
 #
 # 关键取舍：
-#   - `asar: false`：桌面窗口层是按**文件路径 require** 的（`runtime/electron-helper/windows.js`），
+#   - `asar: false`：桌面窗口层是按**文件路径 require** 的（`src/desktop/windows.js`），
 #     它又用 `loadFile(path.join(__dirname,'index.html'))` 读页面；打进 asar 后这两条路径的语义都会变。
 #     不压缩换取"路径就是路径"，也方便用户直接看到运行时文件。
 #   - `perMachine: false`：装到 `%LOCALAPPDATA%\Programs\dsh-petNG`，当前用户可写 ——

@@ -245,7 +245,7 @@ dsh-petNG.exe（单个 Electron 进程）
  │   ├─ credentials → secrets.json     ├─ llm → OpenAI 兼容端点
  │   └─ 事件总线（合成 turn/start、turn/end 驱动工作状态与通知）
  ├─ 托盘 / 设置窗口 / 原生通知
- └─ 桌面窗口层（src/main/desktop.ts + runtime/electron-helper/windows.js）
+ └─ 桌面窗口层（src/main/desktop.ts + src/desktop/windows.js）
      └─ 每只宠物一个透明置顶小窗；渲染端请求经 dsh-pet-ng-bridge:// 直接调宿主路由
 ```
 

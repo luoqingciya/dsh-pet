@@ -6,7 +6,7 @@
  *      `src/host` 的 `apply()` 在其上跑起来（路由表、配置合并、素材归属、桌面窗口启停都在那一份里）；
  *   2. **本地服务**：`listenAppServer` 监听 127.0.0.1，把宿主路由原样接上，
  *      并额外提供设置页与「本地服务」接口（`web-ui.ts`）；
- *   3. **桌面宠物**：**本进程自己**开透明置顶小窗（`runtime/electron-helper/windows.js`，
+ *   3. **桌面宠物**：**本进程自己**开透明置顶小窗（`src/desktop/windows.js`，
  *      经 `desktop.ts` 适配）。渲染端的请求走 `dsh-pet-ng-bridge://` scheme，
  *      `protocol.handle` 直接调宿主路由——同进程内一次函数调用，没有子进程、没有管道；
  *   4. **托盘 + 设置窗口**：应用的壳。关闭设置窗口不退出，退出走托盘菜单。

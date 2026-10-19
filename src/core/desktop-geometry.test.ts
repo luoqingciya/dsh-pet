@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { buildDeskGeometry } = require('../../runtime/electron-helper/desktop-geometry.js');
-const { spriteHitRect, pointerZone } = require('../../runtime/electron-helper/pointer-target.js');
+const { buildDeskGeometry } = require('../../src/desktop/desktop-geometry.js');
+const { spriteHitRect, pointerZone } = require('../../src/desktop/pointer-target.js');
 
 const primary = {
   id: 1,

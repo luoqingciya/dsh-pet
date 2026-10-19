@@ -4,7 +4,7 @@
  *
  * 做什么：
  *   1. tsdown 构建三个入口：app-main.cjs（Electron 主进程）/ app-launch.js（启动器）/ app-settings.js（设置页）
- *   2. 构建桌面共享核心（src/shared → runtime/electron-helper/shared-core.js，window.PetShared）
+ *   2. 构建桌面共享核心（src/shared → src/desktop/shared-core.js，window.PetShared）
  *   3. 改写 package.json 的 files 为发布清单（幂等：跑一次即定格，再跑结果不变）
  *
  * 为什么不在这里打便携版：便携版要拷贝整份 Electron 运行时（约 400MB），属于**分发**动作，
@@ -47,8 +47,6 @@ const keep = [
   'src',
   // 播放素材（VP9-alpha webm）：桌面渲染端只从这里取
   'assets/webm',
-  // 桌面透明窗运行时（主进程 / 渲染端 / 共享核心）
-  'runtime/electron-helper',
   'assets/fonts',
   'assets/pic',
   // 表情包：host 只从**包内** assets/memes 读图，漏掉即配图功能整体失效

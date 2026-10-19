@@ -167,15 +167,12 @@ describe('rollKind —— 随机链掷骰（含宠物固定 fixedEnabled）', ()
 describe('宠物固定 —— 渲染壳必须把开关传进掷骰', () => {
   // 背景：随机链在渲染壳（桌面 DOM sprite）与 shared/pickers 之间分两层，掷骰本身在 shared。
   // 壳里漏传 fixed，宠物就照样自己走/自己翻，表现为「设置页勾了没用」——这里把壳钉住。
-  const desktopShell = readFileSync(
-    fileURLToPath(new URL('../../runtime/electron-helper/sprite.js', import.meta.url)),
-    'utf8',
-  );
+  const desktopShell = readFileSync(fileURLToPath(new URL('../../src/desktop/sprite.js', import.meta.url)), 'utf8');
 
   test('桌面壳（sprite.js 的 playIdle）传了该宠物自己的 fixed', () => {
     assert.ok(
       /rollKind\([^)]*fixed:/.test(desktopShell),
-      'runtime/electron-helper/sprite.js 的 playIdle 必须把 fixed 传进 rollKind（否则宠物照旧乱走）',
+      'src/desktop/sprite.js 的 playIdle 必须把 fixed 传进 rollKind（否则宠物照旧乱走）',
     );
     assert.ok(/fixed:\s*this\.pet\.fixedEnabled/.test(desktopShell), '桌面壳必须传 this.pet.fixedEnabled');
   });

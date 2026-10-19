@@ -58,7 +58,7 @@ function parseOut(argv) {
 /** 只拷应用真正需要的目录（不拷 preview / 源码 / 开发脚本，包体最小） */
 const APP_DIRS = [
   'lib',
-  'runtime',
+  join('src', 'desktop'),
   join('assets', 'webm'),
   join('assets', 'fonts'),
   join('assets', 'pic'),

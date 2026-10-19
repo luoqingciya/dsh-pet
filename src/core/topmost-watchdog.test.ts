@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const helper = '../../runtime/electron-helper/';
+const helper = '../../src/desktop/';
 const { TOPMOST_WATCHDOG_TICK_MS, TOPMOST_REASSERT_MS, shouldReassertTopmost } = require(
   helper + 'topmost-watchdog.js',
 );
@@ -106,7 +106,7 @@ describe('源码守卫 —— 置顶看门狗必须在 main.js 里按这套规�
     );
     assert.ok(
       /require\('\.\/topmost-watchdog\.js'\)/.test(main),
-      '看门狗判定必须复用 runtime/electron-helper/topmost-watchdog.js（纯逻辑有单测）',
+      '看门狗判定必须复用 src/desktop/topmost-watchdog.js（纯逻辑有单测）',
     );
     assert.ok(!/win\.moveTop\(/.test(main), 'moveTop()=HWND_TOP 不落置顶带，不得用它当兜底');
   });

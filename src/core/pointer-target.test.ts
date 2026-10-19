@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const helper = '../../runtime/electron-helper/';
+const helper = '../../src/desktop/';
 const {
   HIT_BOX,
   CANVAS_H,

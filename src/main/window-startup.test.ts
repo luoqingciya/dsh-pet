@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 
 const readSource = (rel: string): string => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
 
-const helperMain = readSource('../../runtime/electron-helper/windows.js');
+const helperMain = readSource('../../src/desktop/windows.js');
 const appMain = readSource('./index.ts');
 
 describe('宠物窗口的页面路径', () => {

@@ -206,8 +206,8 @@ describe('decideBalanceNotice —— 弹不弹文字说明（两端共用同一�
 
 describe('源码守卫 —— 不可用状态不得再被静默丢掉', () => {
   test('桌面外壳：同一条判定 + 不可用也走气泡渲染（不再只写 console）', () => {
-    const events = readSource('../../runtime/electron-helper/events.js');
-    const sprite = readSource('../../runtime/electron-helper/sprite.js');
+    const events = readSource('../../src/desktop/events.js');
+    const sprite = readSource('../../src/desktop/sprite.js');
     assert.ok(
       /S\.decideBalanceNotice/.test(events),
       '桌面轮询必须调用同一份判定（shared-core 的 S.decideBalanceNotice）',

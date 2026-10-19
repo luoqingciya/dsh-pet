@@ -85,7 +85,7 @@ export interface RollOptions {
  * topEnd = (idle+turn+move)/100：三档权重占比之和，剩余概率归入 'action'。
  * opts.fixed（宠物固定）为真时 turn/move 两档权重按 0 算，只可能返回 'idle' 或 'action'。
  *
- * 浏览器（client/pet.ts 的 pickNext）与桌面（runtime/electron-helper/sprite.js 的 playIdle）
+ * 浏览器（client/pet.ts 的 pickNext）与桌面（src/desktop/sprite.js 的 playIdle）
  * 共用本函数，两端随机链行为严格一致。
  */
 export const rollKind = (roll: number, w: Weights, opts?: RollOptions): RollKind => {

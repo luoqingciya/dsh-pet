@@ -6,7 +6,7 @@
  * `<用户缓存>/dsh-pet-ng/electron`）。为几十行类型引入一次大下载不划算。
  *
  * 代价：这份声明必须与真实 API 保持同步。它只被 `src/main/main.ts` 与
- * `runtime/electron-helper/windows.js` 的调用方（src/main/desktop.ts）间接消费，
+ * `src/desktop/windows.js` 的调用方（src/main/desktop.ts）间接消费，
  * 用到的成员一览即全部——改主进程时如果这里缺字段，typecheck 会直接报出来（这正是目的）。
  */
 declare module 'electron' {

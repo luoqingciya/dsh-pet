@@ -17,9 +17,9 @@ import { fileURLToPath } from 'node:url';
 const readSource = (rel: string): string => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
 
 const host = readSource('../api/host.ts') + readSource('../api/router.ts') + readSource('../core/desktop-control.ts');
-const main = readSource('../../runtime/electron-helper/windows.js');
-const preload = readSource('../../runtime/electron-helper/preload.js');
-const sprite = readSource('../../runtime/electron-helper/sprite.js');
+const main = readSource('../../src/desktop/windows.js');
+const preload = readSource('../../src/desktop/preload.js');
+const sprite = readSource('../../src/desktop/sprite.js');
 
 describe('右键「打开设置」', () => {
   test('宿主：只交配置地址，不再有宿主形态 / 令牌相关变量', () => {

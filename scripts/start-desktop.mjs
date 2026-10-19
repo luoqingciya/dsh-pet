@@ -18,7 +18,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const helperMain = resolve(here, '..', 'runtime', 'electron-helper', 'windows.js');
+const helperMain = resolve(here, '..', 'src', 'desktop', 'windows.js');
 const defaultConfigUrl =
   process.env.DSH_PET_CONFIG_URL || process.argv[2] || 'http://127.0.0.1:7340/dsh-pet-ng-7340/config';
 

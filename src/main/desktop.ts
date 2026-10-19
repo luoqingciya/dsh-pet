@@ -1,13 +1,13 @@
 /**
  * 桌面窗口层的应用侧适配器。
  *
- * 真正的窗口逻辑在 `runtime/electron-helper/windows.js`（约 900 行手写 JS：透明置顶窗、
+ * 真正的窗口逻辑在 `src/desktop/windows.js`（约 900 行手写 JS：透明置顶窗、
  * 点击穿透兜底、跨窗碰撞 broker、置顶看门狗、多显示器几何、DPI 线性化）。**刻意没有搬进 TS**：
  *
  *   - 它和同目录的 `sprite.js` / `events.js` / `preload.js` 是一套东西（渲染端脚本经 index.html
  *     顺序加载），搬走一个反而让"这个目录是一个完整运行时"这件事变模糊；
  *   - 那些注释里的实测数据（DWM 缺陷矩阵、DPI 探针的 DELTA、命中区判定）与代码行号一一对应，
- *     搬进 TS 打包后 `__dirname` 也会从 `runtime/electron-helper` 变成 `lib`，路径推导要重写一遍。
+ *     搬进 TS 打包后 `__dirname` 也会从 `src/desktop` 变成 `lib`，路径推导要重写一遍。
  *
  * 本文件只做三件薄事：
  *   1. **ready 之前**把「硬件加速 / force-device-scale-factor」这两件只能那时做的事做掉
@@ -64,7 +64,7 @@ function windowLayer(packageRoot: string): WindowLayer {
   // 用 createRequire 而不是静态 import：这是一个**运行时路径**下的 CommonJS 文件，
   // 静态 import 会让打包器试图把它拉进产物（它自己又 require('electron')，会重复打一份）。
   const nodeRequire = createRequire(__filename);
-  layer = nodeRequire(join(packageRoot, 'runtime', 'electron-helper', 'windows.js')) as WindowLayer;
+  layer = nodeRequire(join(packageRoot, 'src', 'desktop', 'windows.js')) as WindowLayer;
   return layer;
 }
 
@@ -72,7 +72,7 @@ function windowLayer(packageRoot: string): WindowLayer {
  * 必须在 `app.whenReady()` **之前**调用：硬件加速开关与 `force-device-scale-factor`
  * 都只能在 ready 前设置，ready 之后再设无效。
  *
- * @param options.packageRoot 包根（找 runtime/electron-helper/windows.js）
+ * @param options.packageRoot 包根（找 src/desktop/windows.js）
  * @param options.appMainScript 应用主进程脚本（DPI 探测子进程要再跑一遍它，见下）
  *
  * 为什么探测要再拉起一个自己：加了 `force-device-scale-factor` 之后 `screen` API 只会报被强制的值，
@@ -135,7 +135,7 @@ export function createDesktopService(options: {
 /**
  * 建一个**自绘**托盘菜单（Windows/Linux 在 DPI 线性化下原生菜单偏小，见 windows.js）。
  *
- * @param options.packageRoot 包根（找 runtime/electron-helper/windows.js）
+ * @param options.packageRoot 包根（找 src/desktop/windows.js）
  * @param options.onAction 菜单项被点击：action 由调用方解释（打开设置 / 重载 / 检查更新 / …）
  */
 export function createTrayMenuService(options: { packageRoot: string; onAction: (action: string) => void }): {

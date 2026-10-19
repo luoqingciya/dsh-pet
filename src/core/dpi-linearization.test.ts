@@ -26,7 +26,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const helper = '../../runtime/electron-helper/';
+const helper = '../../src/desktop/';
 const { shouldLinearize, resolveForcedScale, resolvePetScale, resolveUiScale } = require(
   helper + 'dpi-linearization.js',
 );
@@ -175,9 +175,6 @@ describe('源码守卫 —— windows.js 只接线，规则住在 dpi-linearizat
 describe('守卫：dpi-linearization.js 必须在发布必需清单里', () => {
   test('prepack-check.js 的 required 含它（windows.js require，缺了会启动即崩）', () => {
     const src = readSource('../../scripts/prepack-check.js');
-    assert.ok(
-      /'runtime\/electron-helper\/dpi-linearization\.js'/.test(src),
-      '漏了它，npm 包里就少一个 windows.js 必需的模块',
-    );
+    assert.ok(/'src\/desktop\/dpi-linearization\.js'/.test(src), '漏了它，npm 包里就少一个 windows.js 必需的模块');
   });
 });
