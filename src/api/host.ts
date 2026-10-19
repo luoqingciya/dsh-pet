@@ -42,7 +42,6 @@
  * 安全性：resolveAsset 做「防穿越」校验，保证路径仍在对应根目录内；
  *         PUT 保存经 saveUserConfig 白名单重建，id 过滤文件名非法字符。
  */
-import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -50,7 +49,7 @@ import { resolveDshHome } from '../core/standalone/home-paths';
 import { credentialRef } from '../core/standalone/credentials';
 import { queryBalance } from '../core/balance/index';
 import { generateWhisper } from '../core/whisper';
-import { generateChat, type ChatMemoryMessage } from '../core/chat';
+import { generateChat } from '../core/chat';
 import { configuredModel } from '../core/model-selection';
 import { limitPool, pickMeme, readMemePool } from '../core/memes';
 import {
@@ -78,6 +77,7 @@ import {
   type HostNotifyFrame,
 } from '../core/notify-events';
 import { createAssetPaths } from '../core/assets';
+import { createMemoryStore } from '../core/memory-store';
 import { PollStateStore } from '../core/state';
 import { readBody, sendFile, sendJson, sendText } from '../core/http';
 import { petSystemPrompt, withTimeContext } from '../core/prompt';
@@ -281,64 +281,8 @@ export function apply(ctx: any): void {
   // "生成结果"直接写 S——多端共享同一句由 S 天然保证，不再需要第二份缓存。
   const lastWhisperAt = new Map<string, number>();
 
-  // 对话记忆文件（唯一读写方 = 本进程；桌面窗口与设置页都只是客户端 → 同一实例天然共享同一份记忆）。
-  // 结构双层：{ <种类桶 assetRoot ?? petId>: { <实例 id>: { messages: ChatMemoryMessage[] } } }
-  const memoryPath = join(userRoot, 'memory.json');
-  // 对话写操作串行队列：read-modify-write 排队执行，防并发对话时交错写盘
-  let chatQueue: Promise<void> = Promise.resolve();
-
-  /** 读记忆文件：不存在 → 空；损坏 → 显式报错 + 备份原始文件（绝不静默丢数据）+ 重建空记忆 */
-  const readMemory = async (): Promise<Record<string, Record<string, { messages: ChatMemoryMessage[] }>>> => {
-    let raw: string;
-    try {
-      raw = await readFile(memoryPath, 'utf8');
-    } catch {
-      return {}; // 文件不存在 = 尚无记忆
-    }
-    try {
-      const parsed = JSON.parse(raw) as Record<string, unknown>;
-      if (!parsed || typeof parsed !== 'object') throw new Error('not an object');
-      return parsed as Record<string, Record<string, { messages: ChatMemoryMessage[] }>>;
-    } catch (e) {
-      console.error(
-        `dsh-petNG: 记忆文件损坏已备份（对话将从头开始）：${memoryPath}（${e instanceof Error ? e.message : String(e)}）`,
-      );
-      try {
-        await mkdir(userRoot, { recursive: true });
-        await writeFile(`${memoryPath}.bak-${Date.now()}`, raw, 'utf8');
-      } catch {
-        /* 备份失败仅告警，不阻断 */
-      }
-      return {};
-    }
-  };
-
-  const writeMemory = async (mem: Record<string, Record<string, { messages: ChatMemoryMessage[] }>>): Promise<void> => {
-    await mkdir(userRoot, { recursive: true });
-    await writeFile(memoryPath, JSON.stringify(mem, null, 2), 'utf8');
-  };
-
-  /** 把一次读写封进串行队列（同进程内防交错），返回 fn 的结果 */
-  const withMemoryLock = <T>(fn: () => Promise<T>): Promise<T> => {
-    const run = chatQueue.then(fn, fn);
-    chatQueue = run.then(
-      () => undefined,
-      () => undefined,
-    );
-    return run;
-  };
-
-  // ---- 配置消费：唯一入口 readAllConfig（./config）——返回值绝对正确，这里只读字段，零校验 ----
-
-  // 人设 system 与「时间背景」的拼装收在 ./prompt：system 必须跨请求逐字相同（prompt cache 的
-  // 前缀），时间这类每分钟都变的内容只能拼到最后一条 user 消息上——见该文件的头注释。
-
-  /** 对话记忆轮数（1 轮 = 1 问 1 答）：所属条目/主条目的 chatMemoryRounds（合并器已填默认非负数字） */
-  const memoryRounds = (petId: string, cfg: Record<string, Record<string, unknown>>): number => {
-    const found = findPetInstance(cfg, petId);
-    const v = Number(found?.conf.chatMemoryRounds ?? cfg.main?.chatMemoryRounds);
-    return Number.isFinite(v) && v >= 0 ? Math.floor(v) : 5;
-  };
+  // 对话记忆：读写 / 串行锁 / 轮数全部收在 core/memory-store（唯一读写方是本进程）
+  const memory = createMemoryStore({ rootDir: userRoot });
 
   /** 生成/返回某宠物的一句碎碎念（周期 GET 与菜单手动触发共用的同一逻辑）：
    *  每只宠物独立生成（所属条目的人设）。生成成功就写进 S 的 pets.<id>.say——
@@ -379,9 +323,9 @@ export function apply(ctx: any): void {
     petId: string,
     text: string,
   ): Promise<{ ok: true } | { ok: false; reason: 'provider-missing' | 'generate-error'; message?: string }> =>
-    withMemoryLock(async () => {
+    memory.withLock(async () => {
       const cfg = readAllConfig(configPaths);
-      const rounds = memoryRounds(petId, cfg);
+      const rounds = memory.roundsFor(petId, cfg);
       const found = findPetInstance(cfg, petId);
       const conf = (found ?? { conf: cfg.main ?? {} }).conf;
       // 人设：所属条目的 whisperPrompt（合并器已填默认）+ 名字声明（与碎碎念同一拼装）
@@ -392,7 +336,7 @@ export function apply(ctx: any): void {
         conf.chatImageEnabled === true
           ? limitPool(readMemePool(conf.memes, memeDirsFor(found?.entry ?? 'main')), Number(conf.chatImageLimit))
           : [];
-      const mem = await readMemory();
+      const mem = await memory.read();
       const bucketKey = found?.entry ?? petId;
       const bucket = (mem[bucketKey] ??= {});
       const entry = (bucket[petId] ??= { messages: [] });
@@ -415,7 +359,7 @@ export function apply(ctx: any): void {
       entry.messages.push({ role: 'user', content: text, ts: now });
       // 记忆只存正文（配图属展示层，不进上下文——否则下次请求会把标记当历史读回去）
       entry.messages.push({ role: 'assistant', content: generated.text, ts: now });
-      await writeMemory(mem);
+      await memory.write(mem);
       // 回复写进 S（与碎碎念同一个叶子：前端本来就是同一条展示链路）。
       // `reply: true` 是给展示层的信号：这是**用户刚问的那句话的回答**，优先级高于
       // 「终态任务」气泡（否则对话一结束，turn/end 的「这一轮搞定啦」会把回答整段盖掉，
@@ -644,8 +588,8 @@ export function apply(ctx: any): void {
     state,
     workStatus,
     llm: ctx.llm,
-    readMemory,
-    memoryRounds,
+    readMemory: () => memory.read(),
+    memoryRounds: (petId, cfg) => memory.roundsFor(petId, cfg),
     publishWhisper,
     chatWithPet,
     refreshBalance,
