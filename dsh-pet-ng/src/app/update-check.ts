@@ -16,8 +16,7 @@
  */
 
 /** 上游仓库（README / 徽章 / Release 都指向这里） */
-// 仓库名还是 dsh-pet（改名只动了产品标识）；等仓库也跟着改名，这里再同步
-export const UPDATE_REPO = 'luoqingciya/dsh-pet';
+export const UPDATE_REPO = 'luoqingciya/dsh-pet-ng';
 
 /** 下载页（检查失败时也能给用户一个落脚点） */
 export const RELEASES_PAGE = `https://github.com/${UPDATE_REPO}/releases/latest`;

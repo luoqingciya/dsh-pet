@@ -51,7 +51,7 @@
 ### 方式三：从源码运行
 
 ```sh
-git clone git@github.com:luoqingciya/dsh-petNG.git
+git clone git@github.com:luoqingciya/dsh-pet-ng.git
 cd dsh-pet-ng/dsh-petNG
 npm install
 npm run app

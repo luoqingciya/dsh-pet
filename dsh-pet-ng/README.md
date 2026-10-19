@@ -6,7 +6,7 @@
 **不需要任何 Agent 框架**：装好直接跑，宠物就在桌面上。
 
 完整说明（功能、设置、自定义动画、素材生成链、排障）见仓库首页：
-<https://github.com/luoqingciya/dsh-pet#readme>
+<https://github.com/luoqingciya/dsh-pet-ng#readme>
 
 ## 安装与运行
 
