@@ -558,7 +558,7 @@ async function bootstrap(): Promise<void> {
     logger: log,
     port: resolvePort(),
     status: () => ({
-      name: 'dsh-pet-ng-app',
+      name: 'dsh-petNG',
       version: appVersion(),
       port: portRef.value,
       uptimeSec: Math.round(process.uptime()),
