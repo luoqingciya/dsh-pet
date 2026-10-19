@@ -28,15 +28,19 @@ const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const SRC = join(ROOT, 'src');
 const VERBOSE = process.argv.includes('--verbose');
 
-/** 允许的依赖方向：from → 可以 import 的层 */
+/** 允许的依赖方向：from → 可以 import 的层
+ *
+ * 这份表必须与 `src/` 下的**实际目录**一致（README 的架构表也照着它写）。
+ * 曾经这里还留着一个 `platform` 层——那个目录从来没在本仓库出现过（是上游项目的），
+ * 留着等于"允许建一个不存在的层"，已删。
+ */
 const LAYERS = {
-  main: ['api', 'desktop', 'core', 'shared', 'platform'],
-  api: ['core', 'shared', 'platform'],
+  main: ['api', 'desktop', 'core', 'shared'],
+  api: ['core', 'shared'],
   desktop: ['shared'],
   ui: ['shared'],
-  core: ['shared', 'platform'],
+  core: ['shared'],
   shared: [],
-  platform: [],
 };
 
 /** 只跑在浏览器/渲染端的层：不许出现 node 内置模块 */

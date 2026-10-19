@@ -239,7 +239,8 @@ curl -s -X POST http://127.0.0.1:7340/dsh-pet-ng-7340/work-status \
 ```
 dsh-petNG.exe（单个 Electron 进程）
  ├─ 本地服务 127.0.0.1:7340
- │   ├─ /dsh-pet-ng-7340/*   宿主半边：配置合并 / 状态仓 / 素材 / 余额 / 对话（src/host）
+ │   ├─ /dsh-pet-ng-7340/*   宿主半边：配置合并 / 状态仓 / 素材 / 余额 / 对话
+ │   │                       （路由在 src/api/router.ts，业务在 src/core/*）
  │   └─ /app/*            设置页与本地服务接口（src/main/web-ui.ts）
  ├─ 宿主上下文（src/main/context.ts）
  │   ├─ credentials → secrets.json     ├─ llm → OpenAI 兼容端点
@@ -251,15 +252,14 @@ dsh-petNG.exe（单个 Electron 进程）
 
 设计上有两条硬规则：**只有一份宠物业务**，以及**分层只允许单向依赖**。
 
-| 层             | 可以依赖                      | 职责                                            |
-| -------------- | ----------------------------- | ----------------------------------------------- |
-| `src/main`     | api · desktop · core · shared | Electron 壳：进程、窗口、托盘、协议、自动更新   |
-| `src/api`      | core · shared                 | HTTP 契约：路由与请求/响应形状                  |
-| `src/desktop`  | shared                        | 桌面窗口层（渲染端，经典 script）               |
-| `src/ui`       | shared                        | 设置页（浏览器代码，**不许 import `node:*`**）  |
-| `src/core`     | shared · platform             | 纯业务：配置 / 状态 / 素材 / 余额 / 对话        |
-| `src/shared`   | —                             | 纯逻辑（菜单、气泡、物理、文案）；见下方注      |
-| `src/platform` | —                             | electron 的薄封装，让 core 能脱离 electron 单测 |
+| 层            | 可以依赖                      | 职责                                                  |
+| ------------- | ----------------------------- | ----------------------------------------------------- |
+| `src/main`    | api · desktop · core · shared | Electron 壳：进程、窗口、托盘、协议、自动更新         |
+| `src/api`     | core · shared                 | HTTP 契约：路由与请求/响应形状                        |
+| `src/desktop` | shared                        | 桌面窗口层（渲染端，经典 script）                     |
+| `src/ui`      | shared                        | 设置页（浏览器代码，**不许 import `node:*`**）        |
+| `src/core`    | shared                        | 纯业务：配置 / 状态 / 素材 / 余额 / 对话              |
+| `src/shared`  | —                             | 无 UI 的共用运行时（物理、位置驱动、菜单/气泡、文案） |
 
 > 「两端共用」里的另一端是浏览器 overlay（DSH 插件侧），**已随项目剥离移出本仓库**。
 > `src/shared` 仍按「两端同构」维护：改动时以这里的实现为准，代码注释里提到的
