@@ -60,13 +60,7 @@ import {
   sliceMemoryRounds,
   type ConfigPaths,
 } from '../core/config';
-import {
-  EXTERNAL_STATUS_SESSION,
-  WorkStatusStore,
-  currentTaskFromTodo,
-  reduceWorkStatus,
-  type ExternalWorkStatusInput,
-} from '../core/work-status';
+import { currentTaskFromTodo, reduceWorkStatus } from '../core/work-status';
 import {
   agentErrorFrame,
   isCompletionTurnEnd,
@@ -76,6 +70,7 @@ import {
 } from '../core/notify-events';
 import { createAssetPaths } from '../core/assets';
 import { createMemoryStore } from '../core/memory-store';
+import { createWorkStatusPublisher } from '../core/work-status-publisher';
 import { createNotifyPipeline, type Waterfall } from '../core/notify-pipeline';
 import { PollStateStore } from '../core/state';
 import { readBody, sendFile, sendJson, sendText } from '../core/http';
@@ -143,61 +138,13 @@ export function apply(ctx: any): void {
   // 聚合与展示选择都在 WorkStatusStore（host/work-status.ts，纯逻辑可单测）：**state 与 task 都按
   // 会话存**——task 曾是全局单值，写过一次就跟着此后所有会话活动一直显示（issue #59）。
   // 进程内内存态：重启回空闲；每次会话事件有实际状态变化才更新（签名比对防刷屏）。
-  const workStatus = new WorkStatusStore();
-  // 工作状态快照 → 写进 S（前端 1s 轮询 /state 后按 counter 变化渲染）。
-  // **只在内容真的变了时才写**：每次写都会推进 counter，前端据此重播档位动画——
-  // 会话事件很密（每个 tool/call 都来），无条件写会把动画刷成幻灯片。
-  // 判据用**内容**（state + task）而不是 store 的 ts：ts 是 Date.now()（毫秒分辨率），
-  // 同一毫秒内连改两次会被误判成"没变化"而漏写（测试里连发事件就会踩到）。
-  // data 里不再带 ts：「变了没有」已由叶子 counter 承担，少一个会漂移的第二信号。
-  let publishedWork = '\u0000';
-  const publishWorkStatus = (): void => {
-    const snap = workStatus.snapshot();
-    const key = String(snap.state) + '\u0000' + String(snap.task);
-    if (key === publishedWork) return;
-    publishedWork = key;
-    state.writeSection('workStatus', { state: snap.state, task: snap.task });
-  };
-  /**
-   * 外部状态灯（`POST /work-status`）：脚本 / IDE 插件 / CI / agent 把桌宠当一盏状态灯用。
-   *
-   * 为什么需要它：离开 DSH 之后，6 个档位里只有「思考 / 成功 / 出错」还能被真实事件触发，
-   * 另外三个（working / result / waiting）描述的是「agent 在调工具、在等你确认」——本地没有 agent。
-   * 与其让它们变成死档位，不如把入口开放出去：任何本机任务都能点亮这盏灯。
-   *
-   * 落地方式是**复用同一条链路**：写进同一个 WorkStatusStore（独立会话 id），
-   * 动画、气泡文案、优先级聚合、终态清理全部沿用，渲染端零改动。
-   */
-  let externalClearTimer: ReturnType<typeof setTimeout> | undefined;
-  const applyExternalStatus = (input: ExternalWorkStatusInput): void => {
-    // 每次写入都重排 TTL：后一次写入代表"任务还在继续"，不该被上一条的定时器提前清掉
-    if (externalClearTimer) {
-      clearTimeout(externalClearTimer);
-      externalClearTimer = undefined;
-    }
-    if (input.state === null) {
-      if (workStatus.clear(EXTERNAL_STATUS_SESSION)) publishWorkStatus();
-      return;
-    }
-    // 终态排他：先扫掉别处遗留的终态（对话刚结束的成功/出错会挂 60s），否则它们按优先级/seq
-    // 抢走展示——「灯点亮了，宠物还在演上一轮结果」，或者反过来灯的成功文案压住真实对话结果
-    // （外部 seq = Date.now()，永远比会话事件新）。进行中的档位不动：那是真的在干活。
-    if (input.state === 'success' || input.state === 'error') {
-      workStatus.setTerminal(EXTERNAL_STATUS_SESSION, input.state, Date.now());
-    } else {
-      workStatus.clearTerminal(EXTERNAL_STATUS_SESSION);
-      workStatus.setState(EXTERNAL_STATUS_SESSION, input.state, Date.now());
-    }
-    workStatus.setTask(EXTERNAL_STATUS_SESSION, input.text);
-    publishWorkStatus();
-    if (input.ttlSec > 0) {
-      externalClearTimer = setTimeout(() => {
-        externalClearTimer = undefined;
-        if (workStatus.clear(EXTERNAL_STATUS_SESSION)) publishWorkStatus();
-      }, input.ttlSec * 1000);
-      externalClearTimer.unref?.();
-    }
-  };
+  // 工作状态：快照发布 + 外部状态灯，实现在 core/work-status-publisher
+  const workStatusPublisher = createWorkStatusPublisher({
+    writeSection: (data) => state.writeSection('workStatus', data),
+  });
+  const workStatus = workStatusPublisher.store;
+  const publishWorkStatus = workStatusPublisher.publish;
+  const applyExternalStatus = workStatusPublisher.applyExternal;
 
   // 系统通知帧：宿主监听应用投进来的会话事件（turn/end、agent/error）生成通知帧
   // （帧契约与 shared/notify.ts 一致），写进 S 的 sections.notify；应用主进程轮询到变化后
@@ -748,10 +695,7 @@ export function apply(ctx: any): void {
   // 随宿主生命周期清理：销毁全部桌面窗口
   ctx.effect(() => () => {
     disposed = true;
-    if (externalClearTimer) {
-      clearTimeout(externalClearTimer);
-      externalClearTimer = undefined;
-    }
+    workStatusPublisher.dispose();
     stopDesktop('host-dispose');
   });
 
