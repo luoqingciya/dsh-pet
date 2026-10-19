@@ -371,6 +371,42 @@ npm run test:ui         # 真机 UI 回归（需 DSH_PET_ELECTRON 指向一份 E
 CI（`.github/workflows/build.yml`）在 Windows / macOS / Linux 上构建免安装版并上传；
 Windows 额外产出安装包。推 `v*` 标签时自动创建 Release，附上三平台 zip 与 Windows 安装包。
 
+### 发版步骤
+
+`dev` 是开发分支，`main` 是发布分支——**`main` 只在发版时快进到 `dev`**，所以发版前它通常是旧的。
+
+```sh
+# 1. 升版本（package.json 与 package-lock 必须同步，prepack-check 会查）
+npm version 1.0.1 --no-git-tag-version
+git commit -am "chore(release): 1.0.1"
+
+# 2. 跑一遍完整门禁（与 CI 的 verify 等价）
+npm run prepack
+
+# 3. dev → main 快进合并，两边都推
+git push origin dev
+git checkout main && git merge --ff-only dev && git push origin main
+
+# 4. 打标签并推送——release job 只认 tag，`ui` 与 `package` 全绿才发
+git tag -a v1.0.1 -m "1.0.1 —— 一句话说明"
+git push origin v1.0.1
+git checkout dev   # 回开发分支
+```
+
+三个容易踩的点：
+
+- **发布说明要手写**。CI 用的是 `generate_release_notes`，而本仓库没有 PR（直接提交），它只会
+  生成一行 "Full Changelog" 链接。发完补一份：
+  `gh release edit v1.0.1 --notes-file notes.md`（写清修了什么、下载表、以及跨大版本的升级顺序）。
+- **`ui` job 必须绿**。真机用例（托盘菜单、桌面窗口、拖拽全链路）只在 Windows runner 上跑，
+  它挂了 `release` 会被跳过——tag 已经推上去了，但 Release 不存在。
+- **tag 打错了可以重打**：`git tag -d v1.0.1 && git push origin :refs/tags/v1.0.1`，
+  改完代码重新 `tag -a` + push 即可（Release 还没生成时没有副作用）。
+
+写注入真实输入的 UI 用例时，优先用**合成事件 + 屏幕坐标**而不是 `page.mouse`：
+后者的指针没有物理光标，窗口一移动 Chromium 就会判定指针离开并释放捕获，本地偶发通过、
+CI 稳定失败（1.0.1 首轮 tag 就栽在这里，见 `7f6a81b`）。
+
 ---
 
 ## 许可
