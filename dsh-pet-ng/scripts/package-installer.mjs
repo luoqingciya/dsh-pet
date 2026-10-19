@@ -7,7 +7,7 @@
  *   - 安装版：electron-builder 打 NSIS 向导（仅 Windows），装到 `%LOCALAPPDATA%\Programs\dsh-petNG`，
  *     带开始菜单/桌面快捷方式与卸载项。
  *
- * 两者**数据位置一致**：都在 `<安装目录>/data`（见 src/app/main.ts 的 resolveDataRoot）。
+ * 两者**数据位置一致**：都在 `<安装目录>/data`（见 src/main/main.ts 的 resolveDataRoot）。
  *
  * 用法：
  *   npm run app:installer

@@ -21,7 +21,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 import { flattenConfigPets } from './config.ts';
-import { readAllConfig } from '../host/config.ts';
+import { readAllConfig } from '../core/config.ts';
 import type { Pet } from './types.ts';
 
 /** 条目级字段清单：桌面渲染直接消费，缺一不可 */
@@ -80,8 +80,8 @@ describe('flattenConfigPets —— 成品 → 渲染列表的唯一填充点', (
   });
 
   test('源码守卫：host 写接口返回成品聚合，设置页的提交面必须完整', () => {
-    const panel = readSource('../app/page/pet-panel.tsx');
-    const host = readSource('../host/index.ts');
+    const panel = readSource('../ui/pet-panel.tsx');
+    const host = readSource('../core/index.ts');
 
     // ① 四个写/读接口都返回成品聚合——设置页拿响应直接刷新，不自己拼字段
     const returns = host.match(/obj: readAllConfig\(configPaths\)/g) ?? [];

@@ -1,9 +1,9 @@
 /**
  * 打包脚本用的「Electron 运行时目录」解析。
  *
- * **必须与 `src/app/electron-runtime.ts` 的 `electronLandingDir()` 同口径**——那边是应用
+ * **必须与 `src/main/electron-runtime.ts` 的 `electronLandingDir()` 同口径**——那边是应用
  * 运行期的唯一定义（开发态下载/定位走它）。打包脚本是纯 `.mjs`（`node scripts/package-app.mjs`
- * 直接跑），不能 import TS，所以这里镜像一份；`src/app/electron-runtime.test.ts` 会把两边的
+ * 直接跑），不能 import TS，所以这里镜像一份；`src/main/electron-runtime.test.ts` 会把两边的
  * 结果对一遍，防止再次漂移（0.9.0 就因为只改了应用侧、打包脚本还认旧路径，三平台 CI 全挂）。
  *
  * 顺序（与运行时一致）：

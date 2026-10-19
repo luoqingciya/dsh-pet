@@ -30,7 +30,7 @@ export default tseslint.config(
   },
   {
     // 本地应用设置页（React 组件，浏览器 bundle）：同一套 hooks 规则
-    files: ['src/app/page/**/*.tsx'],
+    files: ['src/ui/**/*.tsx'],
     plugins: { 'react-hooks': reactHooks },
     rules: {
       'react-hooks/rules-of-hooks': 'error',

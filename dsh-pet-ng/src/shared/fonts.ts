@@ -4,7 +4,7 @@
 // 按 id 经 fontStackOf 取栈应用，不再各写一份字面量。
 // 为什么配置里只存 id、不存字体栈：字体栈是 CSS 片段，用户手改写错会把样式拼坏；id 有白名单可校验
 // （host 侧 topFieldValid 的 fontValid 用的是本清单的自包含副本——host 不能 import src/shared，
-//  见 src/host/config.ts 头部注释，所以两边改动必须同步）。
+//  见 src/core/config.ts 头部注释，所以两边改动必须同步）。
 import type { FontConfig, FontFamilyId } from './types';
 
 /** 一个字体预设：id（写进 config.jsonc 的 font.family）+ 两端共用的 CSS 字体栈 */

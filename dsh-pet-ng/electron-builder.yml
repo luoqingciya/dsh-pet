@@ -9,7 +9,7 @@
 #     它又用 `loadFile(path.join(__dirname,'index.html'))` 读页面；打进 asar 后这两条路径的语义都会变。
 #     不压缩换取"路径就是路径"，也方便用户直接看到运行时文件。
 #   - `perMachine: false`：装到 `%LOCALAPPDATA%\Programs\dsh-petNG`，当前用户可写 ——
-#     应用的配置/素材/日志就落在 `<安装目录>/data`（见 src/app/main.ts 的 resolveDataRoot）。
+#     应用的配置/素材/日志就落在 `<安装目录>/data`（见 src/main/main.ts 的 resolveDataRoot）。
 #     装到 Program Files 会因不可写而回落用户目录，就不是"数据都在安装目录下"了。
 #   - 只发 x64：与 CI 的便携版一致；arm64 等有人需要再加。
 appId: cn.luoqingciya.dshpetng

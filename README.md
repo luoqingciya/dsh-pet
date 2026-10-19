@@ -240,12 +240,12 @@ curl -s -X POST http://127.0.0.1:7340/dsh-pet-ng-7340/work-status \
 dsh-petNG.exe（单个 Electron 进程）
  ├─ 本地服务 127.0.0.1:7340
  │   ├─ /dsh-pet-ng-7340/*   宿主半边：配置合并 / 状态仓 / 素材 / 余额 / 对话（src/host）
- │   └─ /app/*            设置页与本地服务接口（src/app/web-ui.ts）
- ├─ 宿主上下文（src/app/context.ts）
+ │   └─ /app/*            设置页与本地服务接口（src/main/web-ui.ts）
+ ├─ 宿主上下文（src/main/context.ts）
  │   ├─ credentials → secrets.json     ├─ llm → OpenAI 兼容端点
  │   └─ 事件总线（合成 turn/start、turn/end 驱动工作状态与通知）
  ├─ 托盘 / 设置窗口 / 原生通知
- └─ 桌面窗口层（src/app/desktop.ts + runtime/electron-helper/windows.js）
+ └─ 桌面窗口层（src/main/desktop.ts + runtime/electron-helper/windows.js）
      └─ 每只宠物一个透明置顶小窗；渲染端请求经 dsh-pet-ng-bridge:// 直接调宿主路由
 ```
 
@@ -254,7 +254,7 @@ dsh-petNG.exe（单个 Electron 进程）
 加一个端点或改一处动画逻辑，桌面窗口、设置页、HTTP 接口同时生效。
 
 宿主半边需要的三样「框架级」原语——LLM 消息构造、凭证引用、用户数据根——在
-`src/host/standalone/` 有一份本地实现。项目**不依赖任何 Agent 框架**，源码里也不出现
+`src/core/standalone/` 有一份本地实现。项目**不依赖任何 Agent 框架**，源码里也不出现
 DSH 的包名（`npm run prepack` 会扫描产物，混进 `@deepseek-ai/*` 直接判失败）。
 
 桌宠窗口与宿主在**同一个进程**里：渲染端的每个请求走 `dsh-pet-ng-bridge://` scheme，

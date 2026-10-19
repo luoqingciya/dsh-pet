@@ -180,7 +180,7 @@ if (leftovers.length > 0) fail(`package.json 仍残留插件字段：${leftovers
 else ok('package.json 无插件残留字段');
 
 // ---- 7. 产物里不得残留 DSH 的包名 ----
-// 宿主半边原先静态 import 三个 @deepseek-ai/*，脱离 DSH 后已换成本地实现（src/host/standalone）。
+// 宿主半边原先静态 import 三个 @deepseek-ai/*，脱离 DSH 后已换成本地实现（src/core/standalone）。
 // tsdown 把 @deepseek-ai/* 全部按 external 处理：万一有人又 import，产物里会留下裸 require，
 // 装到用户机器上才炸（ERR_MODULE_NOT_FOUND）。在这里提前拦。
 const dshRefs = ['app-main.cjs', 'app-launch.js', 'app-settings.js', 'ensure-electron.js']

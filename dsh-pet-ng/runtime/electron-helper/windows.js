@@ -22,7 +22,7 @@
  * 输入：窗口默认**整窗点击穿透**（setIgnoreMouseEvents(true,{forward:true})），渲染端在光标
  * 进/出宠物身体命中区时经 pet:set-interactive 翻转可交互——透明像素不挡下层应用。
  *
- * 用法（宿主侧见 src/app/desktop.ts）：
+ * 用法（宿主侧见 src/main/desktop.ts）：
  *   prepareRuntime()   —— 必须在 app ready **之前**调用（HW 加速与 force-device-scale-factor 只能那时设）
  *   createDesktop(...) —— ready 之后调用，返回 { start, stop, reload }
  *   require.main === module —— 开发/测试用：不经应用壳，直接起一套窗口（scripts/tests/desktop-macos.test.mjs 用它）
