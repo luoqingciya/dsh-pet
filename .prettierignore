@@ -4,6 +4,11 @@ assets
 runtime/electron-helper/shared-core.js
 package-lock.json
 # 启动脚本（cmd/sh 无对应 parser，且原样保留换行与注释）
-dsh-pet.cmd
-dsh-pet.sh
+dsh-pet-ng.cmd
+dsh-pet-ng.sh
 dist
+
+# 手写页面与素材提示词，格式化收益低、diff 噪音大
+tools/*.html
+prompts/
+video/

@@ -135,8 +135,11 @@ app.whenReady().then(async () => {
     win.setContentBounds(target, false);
     await sleep(250);
     const back = win.getContentBounds();
-    const same = target.x === back.x && target.y === back.y && target.width === back.width && target.height === back.height;
-    console.log(`   ${d.label}(scale=${d.scaleFactor}): set ${fmt(target)} → get ${fmt(back)}  ${same ? 'equal' : 'DIFF'}`);
+    const same =
+      target.x === back.x && target.y === back.y && target.width === back.width && target.height === back.height;
+    console.log(
+      `   ${d.label}(scale=${d.scaleFactor}): set ${fmt(target)} → get ${fmt(back)}  ${same ? 'equal' : 'DIFF'}`,
+    );
   }
 
   win.destroy();

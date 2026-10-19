@@ -52,7 +52,7 @@
 
 ```sh
 git clone git@github.com:luoqingciya/dsh-pet-ng.git
-cd dsh-pet-ng/dsh-petNG
+cd dsh-pet-ng
 npm install
 npm run app
 ```
@@ -125,7 +125,7 @@ Windows 直接双击仓库里的 `dsh-pet-ng.cmd`；macOS / Linux 运行 `./dsh-
 | 余额服务商 | 默认跟随模型服务商，也可单独指定（对话走 Ollama、余额查 DeepSeek）                                                                               |
 | 通知       | 对话结果（完成或失败）/ 余额告急                                                                                                                 |
 | 更新       | 启动时检查新版本（可关）+ **「立即检查」按钮**（结果就地显示，有新版本给下载页链接）。只提示 + 打开下载页，不会自动下载或覆盖文件                |
-| 退出       | 设置页底部也有「退出 dsh-petNG」（托盘菜单之外的第二条退出路径）                                                                                   |
+| 退出       | 设置页底部也有「退出 dsh-petNG」（托盘菜单之外的第二条退出路径）                                                                                 |
 
 点「测试连通」可直接验证端点 + 密钥 + 模型是否可用，失败会把服务端返回的原文带出来。
 
@@ -268,10 +268,10 @@ DSH 的包名（`npm run prepack` 会扫描产物，混进 `@deepseek-ai/*` 直�
 
 **打包版：数据跟着程序走。**
 
-| 形态              | 数据目录                                                              |
-| ----------------- | --------------------------------------------------------------------- |
-| 安装版（Windows） | `<安装目录>\data\`（默认 `%LOCALAPPDATA%\Programs\dsh-petNG\data\`）    |
-| 免安装版          | `<解压目录>\data\`                                                    |
+| 形态              | 数据目录                                                                  |
+| ----------------- | ------------------------------------------------------------------------- |
+| 安装版（Windows） | `<安装目录>\data\`（默认 `%LOCALAPPDATA%\Programs\dsh-petNG\data\`）      |
+| 免安装版          | `<解压目录>\data\`                                                        |
 | 源码运行          | `%APPDATA%\dsh-petNG\`（macOS `~/Library/Application Support/dsh-petNG`） |
 
 ```
@@ -313,10 +313,10 @@ DSH 的包名（`npm run prepack` 会扫描产物，混进 `@deepseek-ai/*` 直�
 | 碎碎念/对话报「缺少 API Key」         | 「本地服务」填对应密钥，或把服务商切到不需要密钥的本机 Ollama                                                                                                 |
 | 报「模型接口返回 HTTP 401」           | 密钥与端点不匹配（DeepSeek 的 key 不能用于自定义端点）                                                                                                        |
 | 余额只弹一句文字说明                  | 该服务商没有余额接口或缺密钥；气泡第二行会给出 provider id 与原因                                                                                             |
-| 端口 7340 被占用                      | 会自动顺延；要固定用 `dsh-petNG --port 7500`（或 `npm run app -- --port 7500`），或设 `DSH_PET_APP_PORT=7500`                                                   |
+| 端口 7340 被占用                      | 会自动顺延；要固定用 `dsh-petNG --port 7500`（或 `npm run app -- --port 7500`），或设 `DSH_PET_APP_PORT=7500`                                                 |
 | 装到 Program Files 后数据不在安装目录 | 那里对普通用户不可写，应用自动回落到用户目录；改用默认的 per-user 安装位置即可                                                                                |
 | 想看详细日志                          | `DSH_PET_APP_DEBUG=1 npm run app`，或直接看 `app.log`                                                                                                         |
-| 开机后没有自动启动                    | 先看「任务管理器 → 启动」里 dsh-petNG 是否被禁用（Windows 会尊重那里的开关，设置页也会跟着显示为关）；源码态挪过仓库目录的话，回设置页重新勾一次                |
+| 开机后没有自动启动                    | 先看「任务管理器 → 启动」里 dsh-petNG 是否被禁用（Windows 会尊重那里的开关，设置页也会跟着显示为关）；源码态挪过仓库目录的话，回设置页重新勾一次              |
 | 从不提示新版本                        | 国内访问 `api.github.com` 常不通（失败静默）；托盘「检查更新」会明确报错。可用 `DSH_PET_UPDATE_API` 指向镜像或自建 JSON（`{version,url}` 或 GitHub 形状都认） |
 
 ---

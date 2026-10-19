@@ -13,8 +13,8 @@ import { fileURLToPath } from 'node:url';
 const require = createRequire(import.meta.url);
 const yaml = require('js-yaml');
 
-const HERE = dirname(fileURLToPath(import.meta.url)); // dsh-pet-ng/scripts
-const SPEC_PATH = join(HERE, '..', '..', 'openapi.yaml'); // 仓库根
+const HERE = dirname(fileURLToPath(import.meta.url)); // <仓库根>/scripts
+const SPEC_PATH = join(HERE, '..', 'openapi.yaml'); // 仓库根
 const HOST_SRC = join(HERE, '..', 'src', 'core', 'index.ts');
 
 const doc = yaml.load(readFileSync(SPEC_PATH, 'utf8'));

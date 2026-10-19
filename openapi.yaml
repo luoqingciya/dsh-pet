@@ -68,7 +68,7 @@ servers:
       路由前缀固定为 `/dsh-pet-ng-7340`（7340 是历史遗留的名字，**不是端口号**）。
     variables:
       port:
-        default: "7340"
+        default: '7340'
         description: 本地服务实际监听的端口
 
 tags:
@@ -122,7 +122,7 @@ paths:
           要提取 id 请用固定前缀/后缀做切片。
         - 宠物 id 是配置里 `pets[].id`，默认是 `main`。要拿到全部 id 请看 `GET /config`。
       responses:
-        "200":
+        '200':
           description: 当前状态
           headers:
             cache-control:
@@ -132,11 +132,11 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PollState"
-        "405":
-          $ref: "#/components/responses/MethodNotAllowed"
-        "500":
-          $ref: "#/components/responses/InternalError"
+                $ref: '#/components/schemas/PollState'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /dsh-pet-ng-7340/balance:
     post:
@@ -155,14 +155,14 @@ paths:
         - 常规的周期刷新由宿主**自己的定时器**完成（周期来自配置
           `eventsRefreshSec.balance`，默认 1800 秒），前端不需要轮询它。
       responses:
-        "200":
+        '200':
           description: 刷新动作已完成（不代表余额可用）
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OkResponse"
-        "405":
-          $ref: "#/components/responses/MethodNotAllowed"
+                $ref: '#/components/schemas/OkResponse'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
 
   /dsh-pet-ng-7340/whisper:
     post:
@@ -182,9 +182,9 @@ paths:
         - 模型选择：条目配置的 `whisperModel` 优先；留空则跟随「本地服务」配置的模型。
           指定模型生成失败时会**自动回落到「本地服务」配置的模型**重试一次。
       parameters:
-        - $ref: "#/components/parameters/PetIdQuery"
+        - $ref: '#/components/parameters/PetIdQuery'
       responses:
-        "200":
+        '200':
           description: |
             生成结果。注意 HTTP 状态码**恒为 200**（除 405）：失败通过 `ok: false` 表达，
             这样调用方只需解析一层即可，不必区分"HTTP 失败"与"业务失败"。
@@ -192,10 +192,10 @@ paths:
             application/json:
               schema:
                 oneOf:
-                  - $ref: "#/components/schemas/OkResponse"
-                  - $ref: "#/components/schemas/FailureResponse"
-        "405":
-          $ref: "#/components/responses/MethodNotAllowed"
+                  - $ref: '#/components/schemas/OkResponse'
+                  - $ref: '#/components/schemas/FailureResponse'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
 
   /dsh-pet-ng-7340/broadcast:
     post:
@@ -259,7 +259,7 @@ paths:
                   text: 巡检完毕，一切正常
                   image: 厉害了我的鲸
       responses:
-        "200":
+        '200':
           description: |
             恒为 200（除 405/400）。失败通过 `ok: false` 表达，`reason` 可能是
             `bad-request`（空文本/超长）、`unknown-pet`、`unknown-image`、
@@ -268,16 +268,16 @@ paths:
             application/json:
               schema:
                 oneOf:
-                  - $ref: "#/components/schemas/OkResponse"
-                  - $ref: "#/components/schemas/FailureResponse"
-        "400":
+                  - $ref: '#/components/schemas/OkResponse'
+                  - $ref: '#/components/schemas/FailureResponse'
+        '400':
           description: '请求体不是合法 JSON（`{ "error": "invalid JSON body" }`）'
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "405":
-          $ref: "#/components/responses/MethodNotAllowed"
+                $ref: '#/components/schemas/ErrorResponse'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
 
   /dsh-pet-ng-7340/anim:
     post:
@@ -353,7 +353,7 @@ paths:
                 value:
                   name: 螃蟹走路
       responses:
-        "200":
+        '200':
           description: |
             恒为 200（除 405/400）。失败通过 `ok: false` 表达，`reason` 可能是
             `bad-request`（名字为空）、`unknown-pet`、`unknown-animation`、
@@ -362,16 +362,16 @@ paths:
             application/json:
               schema:
                 oneOf:
-                  - $ref: "#/components/schemas/OkResponse"
-                  - $ref: "#/components/schemas/FailureResponse"
-        "400":
+                  - $ref: '#/components/schemas/OkResponse'
+                  - $ref: '#/components/schemas/FailureResponse'
+        '400':
           description: '请求体不是合法 JSON（`{ "error": "invalid JSON body" }`）'
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "405":
-          $ref: "#/components/responses/MethodNotAllowed"
+                $ref: '#/components/schemas/ErrorResponse'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
 
   /dsh-pet-ng-7340/work-status:
     post:
@@ -414,9 +414,8 @@ paths:
               required: [state]
               properties:
                 state:
-                  type: [string, "null"]
-                  enum:
-                    [thinking, working, result, waiting, success, error, null]
+                  type: [string, 'null']
+                  enum: [thinking, working, result, waiting, success, error, null]
                   description: |
                     档位（与 `animations.events.workStatus` 索引一一对应）：
                     `thinking` 思考 / `working` 干活 / `result` 收尾 /
@@ -449,7 +448,7 @@ paths:
                 value:
                   state: null
       responses:
-        "200":
+        '200':
           description: 已写入（返回写入后的**展示档位**：可能被更高优先级的会话压住，故单独回传）
           content:
             application/json:
@@ -461,11 +460,10 @@ paths:
                     type: boolean
                     const: true
                   state:
-                    type: [string, "null"]
-                    enum:
-                      [thinking, working, result, waiting, success, error, null]
+                    type: [string, 'null']
+                    enum: [thinking, working, result, waiting, success, error, null]
                     description: 当前实际展示的档位（`null` = 空闲）
-        "400":
+        '400':
           description: '请求体非法（`{ "ok": false, "error": "…" }`）或不是合法 JSON'
           content:
             application/json:
@@ -479,8 +477,8 @@ paths:
                   error:
                     type: string
                     example: 'state 只能是 thinking / working / result / waiting / success / error 或 null，收到 "busy"'
-        "405":
-          $ref: "#/components/responses/MethodNotAllowed"
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
 
   /dsh-pet-ng-7340/chat:
     get:
@@ -494,9 +492,9 @@ paths:
         因此**天然共享同一份记忆**。文件全量保留、不删除，
         只是响应时按 `chatMemoryRounds`（默认 5 轮，1 轮 = 1 问 1 答）截取尾部。
       parameters:
-        - $ref: "#/components/parameters/PetIdQuery"
+        - $ref: '#/components/parameters/PetIdQuery'
       responses:
-        "200":
+        '200':
           description: 最近窗口
           content:
             application/json:
@@ -511,14 +509,14 @@ paths:
                     type: array
                     description: 按时间正序排列的消息，最多 `rounds * 2` 条
                     items:
-                      $ref: "#/components/schemas/ChatMemoryMessage"
+                      $ref: '#/components/schemas/ChatMemoryMessage'
                   rounds:
                     type: integer
                     description: 该宠物当前生效的轮数（来自配置 `chatMemoryRounds`）
-        "405":
-          $ref: "#/components/responses/MethodNotAllowed"
-        "500":
-          $ref: "#/components/responses/InternalError"
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '500':
+          $ref: '#/components/responses/InternalError'
     post:
       tags: [Action]
       operationId: sendChat
@@ -535,7 +533,7 @@ paths:
           指定模型生成失败时会**自动回落到「本地服务」配置的模型**重试一次。
         - 记忆只存**正文**：配图属展示层，不进上下文（否则下次请求会把标记当历史读回去）。
       parameters:
-        - $ref: "#/components/parameters/PetIdQuery"
+        - $ref: '#/components/parameters/PetIdQuery'
       requestBody:
         required: true
         content:
@@ -554,7 +552,7 @@ paths:
                 value:
                   text: 今天过得怎么样？
       responses:
-        "200":
+        '200':
           description: |
             恒为 200（除 405）。`reason` 取值：`bad-request`（空/超长消息）、
             `provider-missing`（没有可用的对话服务商）、`generate-error`（生成/IO 失败）。
@@ -562,10 +560,10 @@ paths:
             application/json:
               schema:
                 oneOf:
-                  - $ref: "#/components/schemas/OkResponse"
-                  - $ref: "#/components/schemas/FailureResponse"
-        "405":
-          $ref: "#/components/responses/MethodNotAllowed"
+                  - $ref: '#/components/schemas/OkResponse'
+                  - $ref: '#/components/schemas/FailureResponse'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
 
   /dsh-pet-ng-7340/config:
     get:
@@ -586,22 +584,22 @@ paths:
         再取：`main` 条目由内置默认 + 用户层合并而来，`pet/<名>-config.json` 的条目由该种类文件
         覆盖。没有一份对所有宠物生效的全局动画池。
       responses:
-        "200":
+        '200':
           description: 成品配置（顶层为条目名 → 该条目配置对象）
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties:
-                  $ref: "#/components/schemas/PetConfigEntry"
-        "405":
-          $ref: "#/components/responses/MethodNotAllowed"
-        "500":
+                  $ref: '#/components/schemas/PetConfigEntry'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '500':
           description: 配置文件损坏或读取失败
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: '#/components/schemas/ErrorResponse'
     put:
       tags: [Config]
       operationId: saveConfig
@@ -630,13 +628,13 @@ paths:
           description: 置 `1` 时跳过"用户层不可解析"的预检，强行重建并写盘
           schema:
             type: string
-            enum: ["1"]
+            enum: ['1']
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/SaveConfigRequest"
+              $ref: '#/components/schemas/SaveConfigRequest'
             examples:
               singlePet:
                 summary: 保存一只宠物
@@ -657,15 +655,15 @@ paths:
                   whisperImageEnabled: true
                   chatImageEnabled: true
       responses:
-        "200":
+        '200':
           description: 保存成功，返回保存后的成品聚合
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties:
-                  $ref: "#/components/schemas/PetConfigEntry"
-        "400":
+                  $ref: '#/components/schemas/PetConfigEntry'
+        '400':
           description: |
             请求体非法。可能是 JSON 解析失败（`invalid JSON body`），
             或字段校验不通过（`invalid pet config`：`id` 为空/超 64 字/含文件名非法字符、
@@ -674,10 +672,10 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "405":
-          $ref: "#/components/responses/MethodNotAllowed"
-        "409":
+                $ref: '#/components/schemas/ErrorResponse'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
           description: |
             用户层配置损坏且未带 `?force=1`。调用方应弹窗询问用户，
             取消则不动文件，确认后带 `?force=1` 重试。
@@ -707,22 +705,22 @@ paths:
 
         写盘后异步重建桌面窗口，并返回新的成品聚合。
       responses:
-        "200":
+        '200':
           description: 同步成功，返回新的成品聚合
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties:
-                  $ref: "#/components/schemas/PetConfigEntry"
-        "405":
-          $ref: "#/components/responses/MethodNotAllowed"
-        "500":
+                  $ref: '#/components/schemas/PetConfigEntry'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '500':
           description: 内置默认文件缺失，或用户目录不可写（绝不静默留下半个配置文件）
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: '#/components/schemas/ErrorResponse'
 
   /dsh-pet-ng-7340/pet-display:
     post:
@@ -765,38 +763,38 @@ paths:
                   id: main
                   display: web
       responses:
-        "200":
+        '200':
           description: 改动成功，返回改动后的成品聚合
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties:
-                  $ref: "#/components/schemas/PetConfigEntry"
-        "400":
+                  $ref: '#/components/schemas/PetConfigEntry'
+        '400':
           description: |
             请求体非法：JSON 解析失败（`invalid JSON body`）、缺 `id`（`missing pet id`）、
             或 `display` 不在枚举内（`invalid display: xxx`）。
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
           description: |
             找不到该宠物（`pet not found: xxx`）。该实例因 `id` 与其它条目重复而在合并时被跳过时
             也走这里——那种情况下它在成品聚合里根本不存在，宿主不会去猜它属于哪个文件。
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "405":
-          $ref: "#/components/responses/MethodNotAllowed"
-        "500":
+                $ref: '#/components/schemas/ErrorResponse'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '500':
           description: 配置读取失败（安装损坏）或写盘失败
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: '#/components/schemas/ErrorResponse'
 
   /dsh-pet-ng-7340/config/meta:
     get:
@@ -806,7 +804,7 @@ paths:
       description: |
         设置页「存储」区的展示数据源：告诉你配置和素材到底落在哪。
       responses:
-        "200":
+        '200':
           description: 路径清单
           content:
             application/json:
@@ -844,7 +842,7 @@ paths:
           （适配器声明可配置的路由），免得下拉框空着。
         - 服务商/模型的 `name` 缺失时回落为 `id`。
       responses:
-        "200":
+        '200':
           description: 服务商与模型清单
           content:
             application/json:
@@ -855,15 +853,15 @@ paths:
                   providers:
                     type: array
                     items:
-                      $ref: "#/components/schemas/Provider"
-        "405":
-          $ref: "#/components/responses/MethodNotAllowed"
-        "500":
+                      $ref: '#/components/schemas/Provider'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '500':
           description: 读取服务商清单失败
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: '#/components/schemas/ErrorResponse'
 
   /dsh-pet-ng-7340/reload:
     post:
@@ -878,7 +876,7 @@ paths:
         **注意**：窗口会被销毁重建，正在进行的窗口内交互会中断。
         因此实现上不等待重启完成，立刻返回 `200`。
       responses:
-        "200":
+        '200':
           description: 已排入重启队列
           content:
             application/json:
@@ -889,10 +887,10 @@ paths:
                   reloading:
                     type: boolean
                     const: true
-        "405":
-          $ref: "#/components/responses/MethodNotAllowed"
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
 
-  "/dsh-pet-ng-7340/thumb/{petId}/{file}":
+  '/dsh-pet-ng-7340/thumb/{petId}/{file}':
     get:
       tags: [Assets]
       operationId: getAnimation
@@ -921,7 +919,7 @@ paths:
           schema:
             type: string
       responses:
-        "200":
+        '200':
           description: 动画文件
           content:
             video/webm:
@@ -932,7 +930,7 @@ paths:
               schema:
                 type: string
                 format: binary
-        "400":
+        '400':
           description: |
             `petId` 含非法字符；或扩展名不是 `.webm`/`.mov`
             （`unsupported animation format`）；或路径段数不对。
@@ -940,37 +938,37 @@ paths:
             text/plain:
               schema:
                 type: string
-        "404":
-          description: "素材不存在（`dsh-petNG: asset not found`）"
+        '404':
+          description: '素材不存在（`dsh-petNG: asset not found`）'
           content:
             text/plain:
               schema:
                 type: string
 
-  "/dsh-pet-ng-7340/font/{file}":
+  '/dsh-pet-ng-7340/font/{file}':
     get:
       tags: [Assets]
       operationId: getFont
       summary: 获取字体文件
       description: 从包内 `assets/fonts/` 读取（扁平结构，**没有** petId 段）。
       parameters:
-        - $ref: "#/components/parameters/AssetFile"
+        - $ref: '#/components/parameters/AssetFile'
       responses:
-        "200":
+        '200':
           description: 字体文件
           content:
             application/octet-stream:
               schema:
                 type: string
                 format: binary
-        "404":
-          description: "字体不存在（`dsh-petNG: font not found`）"
+        '404':
+          description: '字体不存在（`dsh-petNG: font not found`）'
           content:
             text/plain:
               schema:
                 type: string
 
-  "/dsh-pet-ng-7340/pic/{file}":
+  '/dsh-pet-ng-7340/pic/{file}':
     get:
       tags: [Assets]
       operationId: getPic
@@ -993,9 +991,9 @@ paths:
           `素材根` 是**标识符**（不是路径片段）：含分隔符 / 保留字符即 `400`，早于任何路径拼接判定。
           表情包名称即文件名（不含子目录），两者共用同一份防穿越校验。
       parameters:
-        - $ref: "#/components/parameters/AssetFile"
+        - $ref: '#/components/parameters/AssetFile'
       responses:
-        "200":
+        '200':
           description: 图片文件
           content:
             image/png:
@@ -1014,14 +1012,14 @@ paths:
               schema:
                 type: string
                 format: binary
-        "400":
-          description: "素材根含非法字符（`dsh-petNG: invalid asset root`）"
+        '400':
+          description: '素材根含非法字符（`dsh-petNG: invalid asset root`）'
           content:
             text/plain:
               schema:
                 type: string
-        "404":
-          description: "图片不存在（`dsh-petNG: pic not found`）"
+        '404':
+          description: '图片不存在（`dsh-petNG: pic not found`）'
           content:
             text/plain:
               schema:
@@ -1056,14 +1054,14 @@ components:
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ErrorResponse"
+            $ref: '#/components/schemas/ErrorResponse'
 
     InternalError:
       description: 宿主内部错误
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ErrorResponse"
+            $ref: '#/components/schemas/ErrorResponse'
 
   schemas:
     OkResponse:
@@ -1088,15 +1086,7 @@ components:
             失败原因分类。`bad-request` 参数不合法（空文本/超长）、`provider-missing` 没有可用
             的对话服务商、`generate-error` 生成或 IO 失败、`unknown-pet` 指定的桌宠不存在、
             `unknown-image` 配图不在包内表情包池内。
-          enum:
-            [
-              bad-request,
-              provider-missing,
-              generate-error,
-              unknown-pet,
-              unknown-image,
-              unknown-animation,
-            ]
+          enum: [bad-request, provider-missing, generate-error, unknown-pet, unknown-image, unknown-animation]
         message:
           type: string
           description: 人类可读的补充说明（可选）
@@ -1128,11 +1118,11 @@ components:
           required: [balance, workStatus, notify]
           properties:
             balance:
-              $ref: "#/components/schemas/BalanceLeaf"
+              $ref: '#/components/schemas/BalanceLeaf'
             workStatus:
-              $ref: "#/components/schemas/WorkStatusLeaf"
+              $ref: '#/components/schemas/WorkStatusLeaf'
             notify:
-              $ref: "#/components/schemas/NotifyLeaf"
+              $ref: '#/components/schemas/NotifyLeaf'
         pets:
           type: object
           description: 每只宠物各自一份；键是宠物 id（**可含点号，勿切分**）
@@ -1140,9 +1130,9 @@ components:
             type: object
             properties:
               say:
-                $ref: "#/components/schemas/SayLeaf"
+                $ref: '#/components/schemas/SayLeaf'
               anim:
-                $ref: "#/components/schemas/AnimLeaf"
+                $ref: '#/components/schemas/AnimLeaf'
       examples:
         typical:
           summary: 一只有余额与碎碎念的宠物
@@ -1156,9 +1146,9 @@ components:
                   kind: deepseek
                   data:
                     currency: CNY
-                    total: "42.00"
-                    granted: "10.00"
-                    toppedUp: "32.00"
+                    total: '42.00'
+                    granted: '10.00'
+                    toppedUp: '32.00'
               workStatus:
                 counter: 1755000000100
                 data:
@@ -1186,15 +1176,15 @@ components:
       required: [counter, data]
       properties:
         counter:
-          $ref: "#/components/schemas/Counter"
+          $ref: '#/components/schemas/Counter'
         data:
           description: |
             `BalanceState`；`null` = 从未写过。
             由宿主周期刷新（`eventsRefreshSec.balance`，默认 1800 秒）或 `POST /balance` 写入。
           oneOf:
-            - $ref: "#/components/schemas/BalanceView"
-            - $ref: "#/components/schemas/BalanceUnavailable"
-            - type: "null"
+            - $ref: '#/components/schemas/BalanceView'
+            - $ref: '#/components/schemas/BalanceUnavailable'
+            - type: 'null'
 
     BalanceView:
       type: object
@@ -1290,15 +1280,15 @@ components:
       required: [counter, data]
       properties:
         counter:
-          $ref: "#/components/schemas/Counter"
+          $ref: '#/components/schemas/Counter'
         data:
           description: |
             `WorkStatusSnapshot`；`null` = 从未写过。
             由宿主监听应用合成的会话事件（`turn/start`、`tool/call`、`tool/result`、
             `approval/asked`、`turn/end`）聚合后写入。
           oneOf:
-            - $ref: "#/components/schemas/WorkStatusSnapshot"
-            - type: "null"
+            - $ref: '#/components/schemas/WorkStatusSnapshot'
+            - type: 'null'
 
     WorkStatusSnapshot:
       type: object
@@ -1311,41 +1301,41 @@ components:
           oneOf:
             - type: string
               enum: [thinking, working, result, waiting, success, error]
-            - type: "null"
+            - type: 'null'
         task:
           description: 当前任务详情（由 todo / write 工具提供），可为 `null`
           oneOf:
             - type: string
-            - type: "null"
+            - type: 'null'
 
     NotifyLeaf:
       type: object
       required: [counter, data]
       properties:
         counter:
-          $ref: "#/components/schemas/Counter"
+          $ref: '#/components/schemas/Counter'
         data:
           description: |
             通知帧；`null` = 从未写过。
             由宿主监听应用合成的会话事件生成，应用轮询到变化后弹原生通知。
             **单槽**：新通知直接覆盖旧的，不排队（1 秒轮询下同一拍只处理最新一条）。
           oneOf:
-            - $ref: "#/components/schemas/NotifyFrame"
-            - type: "null"
+            - $ref: '#/components/schemas/NotifyFrame'
+            - type: 'null'
 
     NotifyFrame:
       oneOf:
-        - $ref: "#/components/schemas/TurnEndFrame"
-        - $ref: "#/components/schemas/ApprovalFrame"
-        - $ref: "#/components/schemas/QuestionFrame"
-        - $ref: "#/components/schemas/AgentErrorFrame"
+        - $ref: '#/components/schemas/TurnEndFrame'
+        - $ref: '#/components/schemas/ApprovalFrame'
+        - $ref: '#/components/schemas/QuestionFrame'
+        - $ref: '#/components/schemas/AgentErrorFrame'
       discriminator:
         propertyName: type
         mapping:
-          session/event: "#/components/schemas/TurnEndFrame"
-          approval/requested: "#/components/schemas/ApprovalFrame"
-          question/requested: "#/components/schemas/QuestionFrame"
-          host/agent-error: "#/components/schemas/AgentErrorFrame"
+          session/event: '#/components/schemas/TurnEndFrame'
+          approval/requested: '#/components/schemas/ApprovalFrame'
+          question/requested: '#/components/schemas/QuestionFrame'
+          host/agent-error: '#/components/schemas/AgentErrorFrame'
 
     TurnEndFrame:
       type: object
@@ -1425,7 +1415,7 @@ components:
       required: [counter, data]
       properties:
         counter:
-          $ref: "#/components/schemas/Counter"
+          $ref: '#/components/schemas/Counter'
         data:
           description: |
             该宠物要播的动画；`null` = 从未写过。
@@ -1433,8 +1423,8 @@ components:
             （重播）。名字即素材文件名（`/thumb/<素材根>/<名字>.webm`），因此名字必须存在于
             该宠物的动画池内——由 `POST /anim` 在写入前校验。
           oneOf:
-            - $ref: "#/components/schemas/Anim"
-            - type: "null"
+            - $ref: '#/components/schemas/Anim'
+            - type: 'null'
 
     Anim:
       type: object
@@ -1450,15 +1440,15 @@ components:
       required: [counter, data]
       properties:
         counter:
-          $ref: "#/components/schemas/Counter"
+          $ref: '#/components/schemas/Counter'
         data:
           description: |
             该宠物要说的话；`null` = 从未写过。
             **碎碎念、命令气泡、对话回复共用这一个叶子**——前端本来就是同一条展示链路
             （同一个气泡槽、同一批 `events.whisper` 动画）。
           oneOf:
-            - $ref: "#/components/schemas/Say"
-            - type: "null"
+            - $ref: '#/components/schemas/Say'
+            - type: 'null'
 
     Say:
       type: object
@@ -1592,7 +1582,7 @@ components:
             显示位置。本应用只有桌面窗口：`desktop` = 显示，`none` = 不显示；
             `both` 与 `desktop` 等价，`web` 等价于 `none`（保留这两个取值只为兼容旧配置）。
         position:
-          $ref: "#/components/schemas/Position"
+          $ref: '#/components/schemas/Position'
 
     SaveConfigRequest:
       type: object
@@ -1602,7 +1592,7 @@ components:
           type: array
           minItems: 1
           items:
-            $ref: "#/components/schemas/PetEntry"
+            $ref: '#/components/schemas/PetEntry'
         whisperImageEnabled:
           type: boolean
         chatImageEnabled:
@@ -1653,7 +1643,7 @@ components:
           type: string
           enum: [web, desktop, both, none]
         position:
-          $ref: "#/components/schemas/Position"
+          $ref: '#/components/schemas/Position'
         whisperPrompt:
           type: string
           description: 该宠物的人设提示词（碎碎念与对话共用）
@@ -1661,9 +1651,9 @@ components:
           type: integer
           description: 对话记忆轮数（1 轮 = 1 问 1 答）
         whisperModel:
-          $ref: "#/components/schemas/ModelSelection"
+          $ref: '#/components/schemas/ModelSelection'
         chatModel:
-          $ref: "#/components/schemas/ModelSelection"
+          $ref: '#/components/schemas/ModelSelection'
         whisperImageEnabled:
           type: boolean
         chatImageEnabled:
