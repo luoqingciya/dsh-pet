@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * dsh-petNG desktop helper —— 「全局 DPI 线性化」的纯判定与纯换算。
  *

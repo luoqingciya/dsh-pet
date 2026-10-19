@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * dsh-petNG desktop helper —— 置顶看门狗（纯判定部分）。
  *

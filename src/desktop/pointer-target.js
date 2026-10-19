@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * dsh-petNG desktop helper —— 点击穿透「兜底通道」的纯判定（issue #55 报告者补丁的逻辑部分）。
  *
@@ -36,8 +37,9 @@ const FEET_Y = 330;
  */
 function spriteHitRect(bounds, margins) {
   const legacy = Math.round(bounds.width / 4);
-  const ml = Number.isFinite(margins?.l) ? margins.l : legacy;
-  const mt = Number.isFinite(margins?.t) ? margins.t : legacy;
+  const m = margins ?? { l: legacy, t: legacy };
+  const ml = Number.isFinite(m.l) ? m.l : legacy;
+  const mt = Number.isFinite(m.t) ? m.t : legacy;
   const stageW = bounds.width - ml * 2;
   const stageH = (stageW * CANVAS_H) / STAGE_W;
   const bottomPad = (stageH * (CANVAS_H - FEET_Y)) / CANVAS_H;
