@@ -283,7 +283,7 @@ test('desktop window: 渲染端拿到配置、画出宠物、视频真的在播'
       });
 
       try {
-        // ① 按下：命中层必须接住（接不住 = 宠物拖不动）
+        // ① 真实指针按下：证明 .pet-hit 在 OS 点击穿透（setIgnoreMouseEvents）下仍能接到事件
         await petPage.mouse.move(start.cx, start.cy);
         await petPage.mouse.down();
         const pressed = await petPage.evaluate(() => ({
@@ -292,28 +292,40 @@ test('desktop window: 渲染端拿到配置、画出宠物、视频真的在播'
         }));
         assert.equal(pressed.active, true, 'pointerdown 必须被 .pet-hit 接住');
         assert.equal(pressed.dragging, false, '还没越过阈值时不该算拖拽（否则点击会被误判成拖拽）');
+        // 立刻收掉这个真实指针：它没有对应的**物理**光标，窗口一移 Chromium 就可能判定
+        // "指针已离开"并释放捕获 → lostpointercapture → 松手兜底 → 拖拽被掐断。
+        // 本地偶发、CI 上稳定复现（1.0.1 首轮 tag 就是这么挂的）。拖拽过程改由合成事件驱动。
+        await petPage.mouse.up();
+        await new Promise((r) => setTimeout(r, 50)); // 让真实指针可能触发的 lostpointercapture 先排空
 
-        // ② 越过阈值：进入拖拽态，驱动源切成 drag，宠物真的跟着走
+        // ② 合成 pointerdown + 两次位移：完整走一遍 dragState → 阈值 → 弹簧跟随
         const mid = await petPage.evaluate(async () => {
           const s = sprites[0];
           const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
           const before = { x: s.pos.x, y: s.pos.y };
-          /** 按**屏幕坐标**移动指针（dx/dy 是相对按下点的屏幕增量，CSS px）——与真实鼠标同构 */
-          const move = (dx, dy) =>
+          const pid = 7; // 自用 pointerId，避开真实指针
+          /** 按**屏幕坐标**发指针事件（dx/dy 是相对按下点的屏幕增量，CSS px）——与真实鼠标同构 */
+          const fire = (type, dx, dy, buttons) =>
             s.hit.dispatchEvent(
-              new PointerEvent('pointermove', {
+              new PointerEvent(type, {
                 bubbles: true,
-                pointerId: 1,
-                buttons: 1,
+                cancelable: true,
+                pointerId: pid,
+                button: 0,
+                buttons,
                 screenX: toScreen(s.dragState.sx + dx),
                 screenY: toScreen(s.dragState.sy + dy),
               }),
             );
-          move(40, -20); // 越过阈值（5px）
+          // 基准沿用上一次真实按下记下的屏幕坐标（sx/sy），合成按下只是把它再设一遍
+          fire('pointerdown', 0, 0, 1);
+          const afterDown = { active: s.dragState.active, dragging: s.dragState.dragging };
+          fire('pointermove', 40, -20, 1); // 越过阈值（5px）
           await sleep(30); // 轨迹要两个相隔 ≥20ms 的样本（估速要求）
-          move(120, -60);
+          fire('pointermove', 120, -60, 1);
           await sleep(60); // 弹簧跟随跑几帧，位置真的动起来
           return {
+            afterDown,
             dragging: s.dragState.dragging,
             drive: s.drive,
             live: [s.moveLoop, s.dragLoop, s.throwLoop].filter(Boolean).length,
@@ -322,7 +334,17 @@ test('desktop window: 渲染端拿到配置、画出宠物、视频真的在播'
             pos: { x: s.pos.x, y: s.pos.y },
           };
         });
-        assert.equal(mid.dragging, true, '超过阈值（5px）后必须进入拖拽态');
+        assert.equal(
+          mid.afterDown.active,
+          true,
+          `合成 pointerdown 也必须被接住（实际 ${JSON.stringify(mid.afterDown)}）`,
+        );
+        assert.equal(mid.afterDown.dragging, false, '按下瞬间不该算拖拽');
+        assert.equal(
+          mid.dragging,
+          true,
+          `超过阈值（5px）后必须进入拖拽态（drive=${mid.drive}，live=${mid.live}，按下时 ${JSON.stringify(mid.afterDown)}）`,
+        );
         assert.equal(mid.drive, 'drag', '拖拽期间驱动源必须是 drag');
         assert.equal(mid.live, 1, '拖拽期间只能有一个循环在写位置');
         assert.equal(mid.stage, 'none', '拖拽时舞台要拍平（人物随光标拿起）');
@@ -335,7 +357,7 @@ test('desktop window: 渲染端拿到配置、画出宠物、视频真的在播'
           const init = {
             bubbles: true,
             cancelable: true,
-            pointerId: 1,
+            pointerId: 7,
             button: 0,
             buttons: 0,
             screenX: toScreen(s.dragState.sx + 150),
