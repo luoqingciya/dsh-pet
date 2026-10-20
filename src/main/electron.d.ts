@@ -247,6 +247,17 @@ declare module 'electron' {
     openExternal(url: string): Promise<void>;
   };
 
+  /**
+   * 电源与用户活跃度（只声明本项目用到的部分）。
+   *
+   * 主动陪伴用它判断"人在不在"：`getSystemIdleTime()` 只返回**秒数**，
+   * 不涉及任何窗口标题、应用名或输入内容——这是有意守住的隐私边界。
+   */
+  export const powerMonitor: {
+    /** 距最后一次用户输入（键鼠）的秒数 */
+    getSystemIdleTime(): number;
+  };
+
   /** `app.setLoginItemSettings` 的入参（只声明本项目用到的字段） */
   interface LoginItemSettings {
     /** 登录时启动 */

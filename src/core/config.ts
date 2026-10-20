@@ -37,6 +37,8 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
+import { normalizeCompanionConfig } from './companion';
+
 /** 位置角落白名单 */
 const CORNERS = ['top-left', 'top-right', 'bottom-left', 'bottom-right'] as const;
 const CORNER_SET: ReadonlySet<string> = new Set(CORNERS);
@@ -407,6 +409,9 @@ function topFieldValid(key: string, value: unknown): boolean {
       return weightsValid(value);
     case 'eventsRefreshSec':
       return eventsRefreshSecValid(value);
+    case 'companion':
+      // 主动陪伴：一段可选配置（老配置没有它是正常的）。规则与消费端共用一份（normalize）。
+      return normalizeCompanionConfig(value) !== null;
     case 'physics':
       return physicsValid(value);
     case 'font':

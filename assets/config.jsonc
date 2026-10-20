@@ -10,7 +10,7 @@
 //     chatMemoryRounds / whisperModel / chatModel / eventsRefreshSec
 //   · 条目级（每个条目一份：main 一份、每个种类各一份；种类文件顶层可覆盖）：
 //     whisperPrompt / memes / workStatusTexts / animations / animationWeights
-//   · 只读 main（写了也只认 main 条目那份）：eventsRefreshSec.balance
+//   · 只读 main（写了也只认 main 条目那份）：eventsRefreshSec.balance / companion（主动陪伴，全局一份）
 // 合并口径：所有顶层字段都是**整段替换**——写了就整段用自己的，缺的子键不会从本文件补回来
 //   （消费端各自兜底：余额周期读不到按 1800、碎碎念按 300）。
 {
@@ -307,6 +307,26 @@
   "eventsRefreshSec": {
     "balance": 1800,
     "whisper": 300
+  },
+
+  // ===================== 主动陪伴（全局一份，只读 main 条目） =====================
+  // 让宠物在你干活时自己走过来、伸个懒腰（P0 只做**动作**，一句话都不说）。
+  //
+  // **默认关闭**：主动行为是"未经请求的打扰"，新版本不该替用户默认打开。想试就改成 true。
+  //
+  // 防打扰是硬约束，四条都在这一段里：
+  //   · quietHours   免打扰时段（本地小时，[start, end)；跨零点写 23 → 8）。null = 不限。
+  //   · minIntervalMin 两次主动的最小间隔（分钟，≥1）
+  //   · dailyCap     每日上限（次，0 = 完全不动）
+  //   · awayAfterMin 空闲多少分钟算"人离开了"——离开期间**不做动作**（没人看见，还白花次数）；
+  //                  离开状态解除的那一刻算"刚回来"，会迎一次（走过去），之后才轮到普通闲晃。
+  // 判定顺序与"为什么没动"的取值见 src/core/companion.ts 的 step()（有矩阵单测）。
+  "companion": {
+    "enabled": false,
+    "quietHours": { "start": 23, "end": 8 },
+    "minIntervalMin": 20,
+    "dailyCap": 8,
+    "awayAfterMin": 10
   },
 
   // ===================== 动画链顶层权重 =====================

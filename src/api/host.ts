@@ -50,12 +50,14 @@ import { generateWhisper } from '../core/whisper';
 import { generateChat } from '../core/chat';
 import {
   balancePeriodSec,
+  findPetInstance,
   flattenPetList,
   migrateUserConfig,
   readAllConfig,
   whisperPeriodSec,
   type ConfigPaths,
 } from '../core/config';
+import { pick } from '../shared/pickers';
 import { currentTaskFromTodo, reduceWorkStatus } from '../core/work-status';
 import {
   agentErrorFrame,
@@ -75,6 +77,8 @@ import { PollStateStore } from '../core/state';
 import { readBody, sendFile, sendJson, sendText } from '../core/http';
 import type { DesktopRequest, DesktopResponse, PetDesktop } from '../core/desktop-api';
 import { createPetRouter } from './router';
+import { DEFAULT_COMPANION_CONFIG, normalizeCompanionConfig, step } from '../core/companion';
+import { readCompanionMemory, writeCompanionMemory } from '../core/companion-memory';
 
 /** 插件行 id（与 cordis.patch.yml 一致） */
 export const name = 'pet';
@@ -460,6 +464,92 @@ export function apply(ctx: any): void {
       if (timer !== null) clearTimeout(timer);
     };
   }, 'dsh-petNG: whisper poll');
+
+  // 主动陪伴（P0：**只做动作，不说话**）：每 30s 问一次决策器"现在该不该动"。
+  //
+  // 分工：`core/companion` 是纯决策（什么情况必须闭嘴，有矩阵单测）；这里只做三件事——
+  // 采集信号、执行（写 S 的 pets.<id>.anim）、把计数落盘。
+  // 动作用的通道与右键菜单点播动画**完全同一条**：渲染端收到 anim 叶子后，
+  // 若是 moves 池的动画就走 `tryMove()`（真实位移，边界/朝向/首尾静止段全复用），
+  // 所以这里不需要碰驱动状态机，也不会和漫游/拖拽抢位置（drive 被占时 tryMove 会自己让位）。
+  //
+  // 信号里唯一来自平台的是"系统空闲秒数"（powerMonitor，见 main/index.ts 注入）。
+  ctx.effect(() => {
+    const memFile = join(userRoot, 'companion.json');
+    let memory = readCompanionMemory(memFile);
+    let disposed = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const TICK_MS = 30_000;
+
+    /** 系统空闲秒数；宿主没注入（非 Electron 环境）= 0，即"视为一直在用" */
+    const idleSec = (): number => {
+      const fn = (ctx as { systemIdleSec?: () => number }).systemIdleSec;
+      if (typeof fn !== 'function') return 0;
+      const n = Number(fn());
+      return Number.isFinite(n) && n >= 0 ? n : 0;
+    };
+
+    /** 给某只宠物播一段"走动"：优先 moves 池（真的会走），没有就退回 idle 池（原地动作） */
+    const playMove = (petId: string): void => {
+      const cfg = readAllConfig(configPaths);
+      const found = findPetInstance(cfg, petId);
+      const anims = (found?.conf?.animations ?? {}) as {
+        moves?: { actions?: Array<{ name?: unknown }> };
+        idle?: unknown;
+      };
+      const walk = (anims.moves?.actions ?? []).map((a) => String(a?.name ?? '')).filter(Boolean);
+      const idlePool = Array.isArray(anims.idle) ? anims.idle.map((n) => String(n)) : [];
+      const pool = walk.length ? walk : idlePool;
+      if (!pool.length) return; // 配置残缺（没有可播动作）：这一拍什么都不做
+      state.writePet(petId, 'anim', { name: pick(pool) });
+    };
+
+    const tick = (): void => {
+      if (disposed) return;
+      try {
+        const cfg = readAllConfig(configPaths);
+        const conf = normalizeCompanionConfig(cfg.main?.companion) ?? DEFAULT_COMPANION_CONFIG;
+        if (conf.enabled) {
+          const now = Date.now();
+          const d = new Date(now);
+          const dayKey =
+            d.getFullYear() +
+            '-' +
+            String(d.getMonth() + 1).padStart(2, '0') +
+            '-' +
+            String(d.getDate()).padStart(2, '0');
+          const { decision, memory: next } = step(
+            { now, hour: d.getHours() + d.getMinutes() / 60, dayKey, idleSec: idleSec() },
+            memory,
+            conf,
+          );
+          // 只在真的变了才落盘（"人不在"那几拍会反复返回同一份状态）
+          const changed =
+            next.lastActAt !== memory.lastActAt ||
+            next.dayKey !== memory.dayKey ||
+            next.dayCount !== memory.dayCount ||
+            next.awaySince !== memory.awaySince;
+          if (changed) {
+            memory = next;
+            writeCompanionMemory(memFile, memory);
+          }
+          if (decision.act === 'move') {
+            const pet = effectivePetList().find((p) => p.display !== 'none');
+            const petId = String(pet?.id ?? '');
+            if (petId) playMove(petId);
+          }
+        }
+      } catch {
+        // 读配置失败等：跳过这一拍，别让定时器链断掉（下一拍再试）
+      }
+      timer = setTimeout(tick, TICK_MS);
+    };
+    timer = setTimeout(tick, TICK_MS);
+    return () => {
+      disposed = true;
+      if (timer !== null) clearTimeout(timer);
+    };
+  }, 'dsh-petNG: companion poll');
 
   // 系统通知的宿主监听已在上方注册（notify frames effect）：host 监听 session/event +
   // agent/error 生成通知帧入队，浏览器轮询 /notify 拉取弹 toast（DSH 0.1.5 删除了浏览器侧

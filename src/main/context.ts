@@ -41,6 +41,8 @@ export interface AppContextOptions {
   secrets?: () => SecretMap;
   /** 桌面窗口服务（Electron 环境才有；不传 = 没有桌面宠物，其余端点照常） */
   petDesktop?: PetDesktop;
+  /** 系统空闲秒数（Electron 的 powerMonitor；不传 = 视为一直在用，见 context 里的说明） */
+  systemIdleSec?: () => number;
 }
 
 export interface AppContext {
@@ -171,6 +173,13 @@ export function createAppContext(options: AppContextOptions): AppContext {
 
     // 桌面窗口：只在有 Electron 的环境注入（见 desktop.ts）
     ...(options.petDesktop ? { petDesktop: options.petDesktop } : {}),
+
+    /**
+     * 系统空闲秒数（距最后一次键鼠输入）：主动陪伴判断"人在不在"的唯一信号。
+     * 只有 Electron 能给（powerMonitor），所以从外面注入——`src/api` 与 `src/core` 都不许碰 electron。
+     * 不注入 = 视为"一直在用"（0），此时主动陪伴不会因为"人不在"而闭嘴，但也不会误判成刚回来。
+     */
+    ...(options.systemIdleSec ? { systemIdleSec: options.systemIdleSec } : {}),
   };
 
   return {

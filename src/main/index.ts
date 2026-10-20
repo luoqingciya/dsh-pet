@@ -14,7 +14,7 @@
  * 边界：源码里不出现任何 DSH 包名——宿主半边需要的 LLM 原语 / 凭证引用 / 数据根解析
  * 都在 `src/core/standalone/*` 有一份本地实现；数据目录是应用自己的 `app.getPath('userData')`。
  */
-import { app, BrowserWindow, Menu, Notification, Tray, nativeImage, safeStorage, shell } from 'electron';
+import { app, BrowserWindow, Menu, Notification, Tray, nativeImage, powerMonitor, safeStorage, shell } from 'electron';
 import {
   appendFileSync,
   existsSync,
@@ -531,6 +531,8 @@ async function bootstrap(): Promise<void> {
     config: () => readAppConfig(),
     secrets: () => readSecrets(),
     petDesktop: desktop,
+    // 主动陪伴的"人在不在"信号：只给秒数，不碰任何窗口标题/内容（隐私边界见 core/companion）
+    systemIdleSec: () => powerMonitor.getSystemIdleTime(),
   });
 
   const webUi = createWebUi({
