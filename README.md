@@ -366,6 +366,7 @@ npm run app:installer   # Windows 安装包（NSIS）：dist/installer/dsh-pet-n
 npm run app:smoke       # 端到端冒烟（需要应用已在运行）
 npm run package:smoke   # 打包产物**启动**冒烟（先跑 app:installer / app:package，真的把产物拉起来等 /health）
 npm test                # 单元测试（纯逻辑 + 源码守卫）
+npm run verify          # **一条命令 = CI 的 verify job**（build → typecheck → lint → format → test → layers → prepack-check → openapi）
 npm run test:ui         # 真机 UI 回归（需 DSH_PET_ELECTRON 指向一份 Electron）
 ```
 
@@ -381,8 +382,10 @@ Windows 额外产出安装包。推 `v*` 标签时自动创建 Release，附上�
 npm version 1.0.1 --no-git-tag-version
 git commit -am "chore(release): 1.0.1"
 
-# 2. 跑一遍完整门禁（与 CI 的 verify 等价）
-npm run prepack
+# 2. 跑一遍完整门禁 —— 就用这条，它与 CI 的 verify job **逐条对应**
+#    （从前这里是 npm run prepack，但它少了 test 与 check:layers，已经踩过一次：漏跑
+#     check:openapi 导致新增端点没进 openapi.yaml，CI 直接红）
+npm run verify
 
 # 3. dev → main 快进合并，两边都推
 git push origin dev

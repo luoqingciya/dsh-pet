@@ -890,6 +890,49 @@ paths:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
 
+  '/dsh-pet-ng-7340/companion/snooze':
+    post:
+      tags: [Action]
+      operationId: snoozeCompanion
+      summary: 主动陪伴静音一段时间
+      description: |
+        让桌宠的**主动陪伴**（自己走过来、闲晃）静音一段时间。到期自动恢复。
+
+        与配置里 `companion.enabled` 的分工：那是**长期偏好**（要不要这个功能），
+        这里是**临时意愿**（现在别吵）——只写调度状态，**不改配置文件**，
+        用户点一次不该把自己的配置改掉。静音状态落盘（`companion.json`），重启不解除。
+
+        静音优先于一切其它规则（免打扰时段、每日上限、最小间隔、人刚回来的迎接）。
+        主动陪伴本身默认关闭，未开启时调用它无副作用。
+      parameters:
+        - name: minutes
+          in: query
+          required: false
+          description: 静音分钟数，缺省 60，上限 1440（一天）。非法值按 60 处理。
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1440
+            default: 60
+      responses:
+        '200':
+          description: 已静音
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, until]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+                  until:
+                    type: integer
+                    format: int64
+                    description: 静音截止时刻（Unix 毫秒时间戳）
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+
   '/dsh-pet-ng-7340/thumb/{petId}/{file}':
     get:
       tags: [Assets]
