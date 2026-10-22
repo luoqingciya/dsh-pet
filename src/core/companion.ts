@@ -61,6 +61,8 @@ export interface CompanionMemory {
   dayCount: number;
   /** 用户"离开"的起始时刻（0 = 人在场）；回来时用它算离开了多久 */
   awaySince: number;
+  /** 静音到什么时候（毫秒；0 = 没静音）。由「安静一小时」设置，落盘——重启不该解除静音 */
+  snoozeUntil: number;
 }
 
 /** 什么都没发生过 */
@@ -69,6 +71,7 @@ export const emptyCompanionMemory = (): CompanionMemory => ({
   dayKey: '',
   dayCount: 0,
   awaySince: 0,
+  snoozeUntil: 0,
 });
 
 /**
@@ -79,7 +82,7 @@ export const emptyCompanionMemory = (): CompanionMemory => ({
 export type CompanionFlavor = 'greet' | 'stroll';
 
 /** 为什么没动——排障与调参全靠它 */
-export type CompanionReason = 'disabled' | 'quiet-hours' | 'away' | 'too-soon' | 'daily-cap';
+export type CompanionReason = 'disabled' | 'snoozed' | 'quiet-hours' | 'away' | 'too-soon' | 'daily-cap';
 
 export type CompanionDecision = { act: 'none'; reason: CompanionReason } | { act: 'move'; flavor: CompanionFlavor };
 
@@ -120,35 +123,43 @@ export function step(signals: CompanionSignals, memory: CompanionMemory, cfg: Co
   const rolled: CompanionMemory = memory.dayKey === dayKey ? memory : { ...memory, dayKey, dayCount: 0, awaySince: 0 };
 
   if (!cfg.enabled) return { decision: { act: 'none', reason: 'disabled' }, memory: rolled };
+
+  // 用户手动静音（右键「安静一小时」）：优先于一切规则——那是用户的明确意愿
+  if (rolled.snoozeUntil > now) {
+    return { decision: { act: 'none', reason: 'snoozed' }, memory: rolled };
+  }
+  // 静音已过期：顺手清掉（别让落盘文件里一直留着一个过去的时间戳）
+  const cur: CompanionMemory = rolled.snoozeUntil > 0 ? { ...rolled, snoozeUntil: 0 } : rolled;
+
   if (inQuietHours(hour, cfg.quietHours)) {
-    return { decision: { act: 'none', reason: 'quiet-hours' }, memory: rolled };
+    return { decision: { act: 'none', reason: 'quiet-hours' }, memory: cur };
   }
 
   // 人离开了：记下起点，别做动作（没人看见，还白花次数）
   if (idleSec >= cfg.awayAfterMin * 60) {
-    const awaySince = rolled.awaySince || now;
-    return { decision: { act: 'none', reason: 'away' }, memory: { ...rolled, awaySince } };
+    const awaySince = cur.awaySince || now;
+    return { decision: { act: 'none', reason: 'away' }, memory: { ...cur, awaySince } };
   }
 
-  if (rolled.dayCount >= cfg.dailyCap) {
-    return { decision: { act: 'none', reason: 'daily-cap' }, memory: rolled };
+  if (cur.dayCount >= cfg.dailyCap) {
+    return { decision: { act: 'none', reason: 'daily-cap' }, memory: cur };
   }
-  if (rolled.lastActAt > 0 && now - rolled.lastActAt < cfg.minIntervalMin * 60_000) {
-    return { decision: { act: 'none', reason: 'too-soon' }, memory: rolled };
+  if (cur.lastActAt > 0 && now - cur.lastActAt < cfg.minIntervalMin * 60_000) {
+    return { decision: { act: 'none', reason: 'too-soon' }, memory: cur };
   }
 
   // 人刚回来（离开状态刚解除）：迎接一次，并消费 awaySince——避免连续几拍反复迎接
-  if (rolled.awaySince > 0) {
+  if (cur.awaySince > 0) {
     return {
       decision: { act: 'move', flavor: 'greet' },
-      memory: { ...rolled, lastActAt: now, dayCount: rolled.dayCount + 1, awaySince: 0 },
+      memory: { ...cur, lastActAt: now, dayCount: cur.dayCount + 1, awaySince: 0 },
     };
   }
 
   // 人在场：闲晃一下
   return {
     decision: { act: 'move', flavor: 'stroll' },
-    memory: { ...rolled, lastActAt: now, dayCount: rolled.dayCount + 1 },
+    memory: { ...cur, lastActAt: now, dayCount: cur.dayCount + 1 },
   };
 }
 

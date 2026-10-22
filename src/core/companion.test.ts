@@ -212,3 +212,33 @@ describe('normalizeCompanionConfig —— 配置校验（缺失取默认，写�
     assert.equal(normalizeCompanionConfig({ dailyCap: 8.9 })?.dailyCap, 8);
   });
 });
+
+describe('step —— 手动静音（安静一小时）', () => {
+  test('静音期内 → snoozed，且优先于免打扰/离开等一切规则', () => {
+    const m = mem({ snoozeUntil: baseSignals.now + 30 * 60_000 });
+    assert.deepEqual(step(sig({ hour: 2, idleSec: 99999 }), m, on).decision, {
+      act: 'none',
+      reason: 'snoozed',
+    });
+  });
+
+  test('静音期内不吃次数、不动上次主动时刻', () => {
+    const m = mem({ snoozeUntil: baseSignals.now + 60_000, dayCount: 2, lastActAt: 111 });
+    const r = step(sig(), m, on);
+    assert.equal(r.memory.dayCount, 2);
+    assert.equal(r.memory.lastActAt, 111);
+    assert.equal(r.memory.snoozeUntil, m.snoozeUntil, '静音期内不该把截止时刻改掉');
+  });
+
+  test('静音过期 → 恢复正常判定，并把 snoozeUntil 清零（落盘文件不留在过去的时间戳）', () => {
+    const m = mem({ snoozeUntil: baseSignals.now - 1000 });
+    const r = step(sig(), m, on);
+    assert.equal(r.decision.act, 'move');
+    assert.equal(r.memory.snoozeUntil, 0);
+  });
+
+  test('静音优先于"关闭"之外的所有规则——包括刚回来的迎接', () => {
+    const m = mem({ awaySince: baseSignals.now - 5 * 60_000, snoozeUntil: baseSignals.now + 60_000 });
+    assert.equal(step(sig({ idleSec: 1 }), m, on).decision.act, 'none');
+  });
+});

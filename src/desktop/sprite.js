@@ -1295,6 +1295,9 @@ class PetSprite {
       { label: '碎碎念', action: 'whisper' },
       { label: '对话', action: 'chat' },
       { label: '回到初始位置', action: 'home' },
+      // 主动陪伴的"闭嘴"开关：配置里的 companion.enabled 是长期偏好，这里是"现在别吵"
+      // （只写调度状态，不改配置——用户按一次不该把配置改掉）
+      { label: '安静一小时', action: 'snooze' },
       // 改配置文件后免去回设置页点保存：请宿主重建桌面窗口（全部桌面宠物窗口按最新配置重建）。
       // 放在最后：它是"重新加载"这类维护动作，与上面几个宠物互动项语义不同。
       { label: '重载配置', action: 'reload' },
@@ -1350,6 +1353,10 @@ class PetSprite {
     }
     if (leaf.action === 'reload') {
       this.reloadDesktop(); // 请宿主重建桌面窗口：全部桌面宠物窗口按最新配置重建
+      return;
+    }
+    if (leaf.action === 'snooze') {
+      this.snoozeCompanion(); // 主动陪伴静音一小时（只写调度状态，不动配置）
       return;
     }
     if (!leaf.anim) return;
@@ -1461,6 +1468,13 @@ class PetSprite {
   // （events.js 的 loopsStarted 门控），就地重建 sprite 会漏启新循环或留下旧定时器。
   // 本请求由**即将被重启的这个进程**发出：响应可能永远不回（宿主杀进程时回调地址已失效），
   // 故不 await、不重试，失败只记日志——重载本身就是把本进程换掉。
+  /** 主动陪伴静音一小时：失败只记日志（不影响其它菜单动作） */
+  snoozeCompanion() {
+    fetch(BASE + '/companion/snooze?minutes=60', { method: 'POST' }).catch((e) => {
+      console.error('[dsh-petNG] 静音失败', e);
+    });
+  }
+
   reloadDesktop() {
     fetch(BASE + '/reload', { method: 'POST' }).catch((e) => {
       console.warn('[dsh-petNG] 重载配置请求失败（宿主不可达？）', e);

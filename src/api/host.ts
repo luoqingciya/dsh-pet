@@ -228,6 +228,20 @@ export function apply(ctx: any): void {
   const startDesktop = desktopControl.start;
   const syncDesktop = desktopControl.sync;
 
+  // 主动陪伴的持久化状态：**调度拍与「安静一小时」端点共用这一份**。
+  // 放在路由创建之前，是因为路由要拿到 snoozeCompanion 这个回调；而调度拍的 effect 在下面，
+  // 两者读写的必须是同一个变量（否则静音了却不生效）。
+  const companionFile = join(userRoot, 'companion.json');
+  let companionMemory = readCompanionMemory(companionFile);
+  /** 手动静音：返回静音截止时刻（毫秒）。写盘——重启不该解除静音 */
+  const snoozeCompanion = (minutes: number): number => {
+    const mins = Number.isFinite(minutes) && minutes > 0 ? Math.min(minutes, 24 * 60) : 60;
+    const until = Date.now() + Math.round(mins) * 60_000;
+    companionMemory = { ...companionMemory, snoozeUntil: until };
+    writeCompanionMemory(companionFile, companionMemory);
+    return until;
+  };
+
   /** 单次业务路由（HTTP 请求与桌面窗口的 scheme 请求共用同一份实现）：
    *  输入只需 rawUrl(/dsh-pet-ng-7340/... + 查询) + method + body 文本；返回 RouteResult(JSON/文本/文件)，
    *  消费方各自落盘——业务逻辑只有一份，设置页 / 桌面窗口 / 第三方脚本看到的完全一致。 */
@@ -254,6 +268,7 @@ export function apply(ctx: any): void {
     refreshBalance,
     resolveActivePetId,
     syncDesktop,
+    snoozeCompanion,
     applyExternalStatus,
     emit: (name, ...args) => ctx.emit?.(name, ...args),
     logger: ctx.logger,
@@ -475,11 +490,12 @@ export function apply(ctx: any): void {
   //
   // 信号里唯一来自平台的是"系统空闲秒数"（powerMonitor，见 main/index.ts 注入）。
   ctx.effect(() => {
-    const memFile = join(userRoot, 'companion.json');
-    let memory = readCompanionMemory(memFile);
     let disposed = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const TICK_MS = 30_000;
+    // 拍间隔：默认 30s。真机用例要把节奏压到秒级，所以留了环境变量口子
+    // （与 DSH_PET_SKIP_MIGRATION 同一套做法：只改调度节奏，不改任何行为语义）。
+    const envTick = Number(process.env.DSH_PET_COMPANION_TICK_MS);
+    const TICK_MS = Number.isFinite(envTick) && envTick >= 200 ? envTick : 30_000;
 
     /** 系统空闲秒数；宿主没注入（非 Electron 环境）= 0，即"视为一直在用" */
     const idleSec = (): number => {
@@ -520,18 +536,19 @@ export function apply(ctx: any): void {
             String(d.getDate()).padStart(2, '0');
           const { decision, memory: next } = step(
             { now, hour: d.getHours() + d.getMinutes() / 60, dayKey, idleSec: idleSec() },
-            memory,
+            companionMemory,
             conf,
           );
           // 只在真的变了才落盘（"人不在"那几拍会反复返回同一份状态）
           const changed =
-            next.lastActAt !== memory.lastActAt ||
-            next.dayKey !== memory.dayKey ||
-            next.dayCount !== memory.dayCount ||
-            next.awaySince !== memory.awaySince;
+            next.lastActAt !== companionMemory.lastActAt ||
+            next.dayKey !== companionMemory.dayKey ||
+            next.dayCount !== companionMemory.dayCount ||
+            next.awaySince !== companionMemory.awaySince ||
+            next.snoozeUntil !== companionMemory.snoozeUntil;
           if (changed) {
-            memory = next;
-            writeCompanionMemory(memFile, memory);
+            companionMemory = next;
+            writeCompanionMemory(companionFile, companionMemory);
           }
           if (decision.act === 'move') {
             const pet = effectivePetList().find((p) => p.display !== 'none');

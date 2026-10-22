@@ -79,6 +79,8 @@ export interface PetRouterDeps {
   refreshBalance: (manual?: boolean) => Promise<void>;
   resolveActivePetId: () => string;
   syncDesktop: () => Promise<void>;
+  /** 主动陪伴手动静音（分钟）→ 返回静音截止时刻（毫秒）。「安静一小时」菜单项用它 */
+  snoozeCompanion: (minutes: number) => number;
   applyExternalStatus: (input: ExternalWorkStatusInput) => void;
   emit: (name: string, ...args: unknown[]) => void;
   logger?: { warn?: (message: string) => void };
@@ -107,6 +109,7 @@ export function createPetRouter(deps: PetRouterDeps) {
     refreshBalance,
     resolveActivePetId,
     syncDesktop,
+    snoozeCompanion,
     applyExternalStatus,
     emit,
     logger,
@@ -269,6 +272,16 @@ export function createPetRouter(deps: PetRouterDeps) {
       if (method !== 'POST') return { kind: 'json', status: 405, obj: { error: 'method not allowed' } };
       void syncDesktop();
       return { kind: 'json', status: 200, obj: { reloading: true } };
+    }
+
+    // 主动陪伴：手动静音（右键「安静一小时」/ 第三方脚本也能用）。
+    // `?minutes=` 缺省 60，上限一天——静音是"我要清静"，不该被写成无限期。
+    // 只写调度状态（companion.json），不改配置：配置是"长期偏好"，静音是"现在别吵"。
+    if (rest === 'companion/snooze') {
+      if (method !== 'POST') return { kind: 'json', status: 405, obj: { error: 'method not allowed' } };
+      const raw = Number(url.searchParams.get('minutes') ?? 60);
+      const until = snoozeCompanion(Number.isFinite(raw) ? raw : 60);
+      return { kind: 'json', status: 200, obj: { ok: true, until } };
     }
 
     // 配置文件与素材目录路径（设置页「存储」区展示用）。

@@ -23,6 +23,7 @@ export function readCompanionMemory(file: string): CompanionMemory {
       dayKey: typeof o.dayKey === 'string' ? o.dayKey : '',
       dayCount: num(o.dayCount),
       awaySince: num(o.awaySince),
+      snoozeUntil: num(o.snoozeUntil),
     };
   } catch {
     return emptyCompanionMemory();

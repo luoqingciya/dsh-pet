@@ -31,9 +31,9 @@ export interface MenuLeaf {
   anim?: string;
   /** 自定义动作：open-site=打开设置页 / show-balance=查看余额；whisper=立即碎碎念一句；
    * chat=打开对话弹窗；home=回到初始位置；reload=重载配置（重建桌面窗口，
-   * 全部宠物窗口按最新配置重建）。
+   * 全部宠物窗口按最新配置重建）；snooze=主动陪伴静音一小时（只写调度状态，不动配置）。
    * 手动触发均不受 whisperEnabled 影响（该字段只关自动周期轮询） */
-  action?: 'open-site' | 'show-balance' | 'whisper' | 'chat' | 'home' | 'reload';
+  action?: 'open-site' | 'show-balance' | 'whisper' | 'chat' | 'home' | 'reload' | 'snooze';
 }
 
 /** 分支：带子菜单的项 */

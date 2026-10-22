@@ -26,7 +26,7 @@ function withTempFile(fn: (file: string) => void): void {
 describe('companion-memory —— 读写往返', () => {
   test('写进去再读出来，字段一模一样', () => {
     withTempFile((file) => {
-      const mem = { lastActAt: 1234, dayKey: '2026-10-20', dayCount: 3, awaySince: 999 };
+      const mem = { lastActAt: 1234, dayKey: '2026-10-20', dayCount: 3, awaySince: 999, snoozeUntil: 4567 };
       writeCompanionMemory(file, mem);
       assert.deepEqual(readCompanionMemory(file), mem);
     });
